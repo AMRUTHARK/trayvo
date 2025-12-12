@@ -3,6 +3,7 @@ name: Keep Render Alive
 on:
   schedule:
     # Run every 10 minutes to keep Render backend alive
+    # This prevents the free tier from spinning down
     - cron: '*/10 * * * *'
   workflow_dispatch: # Allow manual trigger
 
@@ -12,9 +13,24 @@ jobs:
     steps:
       - name: Ping Render Backend
         run: |
-          # Replace with your actual Render backend URL
+          # IMPORTANT: Replace with your actual Render backend URL
+          # Example: https://multi-shop-billing-api.onrender.com
           BACKEND_URL="${BACKEND_URL:-https://your-backend.onrender.com}"
-          echo "Pinging $BACKEND_URL/health"
-          curl -f "$BACKEND_URL/health" || echo "Ping failed (this is okay if backend is starting)"
-          echo "Keep-alive ping completed"
+          
+          echo "🔄 Pinging Render backend to keep it alive..."
+          echo "URL: $BACKEND_URL/health"
+          
+          # Ping the health endpoint
+          if curl -f -s --max-time 30 "$BACKEND_URL/health" > /dev/null; then
+            echo "✅ Backend is alive and responding"
+          else
+            echo "⚠️  Backend may be starting up (this is normal for free tier)"
+          fi
+          
+          echo "✅ Keep-alive ping completed"
+          
+      - name: Summary
+        run: |
+          echo "📝 This workflow runs every 10 minutes to prevent Render free tier spin-down"
+          echo "💡 To disable: Delete this file or disable the workflow in GitHub Actions"
 
