@@ -8,18 +8,18 @@ This is a simplified guide for **100% free** deployment. No credit cards, no pay
 
 ## ⚡ Quick Steps (30-45 minutes)
 
-### 1. Database: PlanetScale (5 min) - FREE ✅
+### 1. Database: TiDB Serverless (5 min) - FREE ✅
 
 ```
-1. Go to https://planetscale.com
-2. Sign up (free, no credit card)
-3. Create database: multi_shop_billing
-4. Select "Hobby" plan (FREE)
+1. Go to https://tidbcloud.com
+2. Sign up (free, no credit card required)
+3. Create a cluster (select Serverless tier - FREE)
+4. Create database: multi_shop_billing
 5. Import schema from database/schema.sql
-6. Save connection credentials
+6. Save connection credentials (MySQL compatible)
 ```
 
-**Cost: ₹0/month**
+**Cost: ₹0/month (5GB free per database)**
 
 ---
 
@@ -90,7 +90,7 @@ GitHub Actions will ping your backend every 10 minutes for free.
 
 ## 📋 Free Tier Checklist
 
-- [ ] PlanetScale: "Hobby" plan selected (FREE)
+- [ ] TiDB Serverless: Serverless tier selected (FREE)
 - [ ] Render: "Free" plan selected (not Starter)
 - [ ] Vercel: Free tier (automatic)
 - [ ] Gmail: Free SMTP (500 emails/day)
@@ -107,7 +107,7 @@ GitHub Actions will ping your backend every 10 minutes for free.
 |---------|------|--------------|
 | Vercel | Free | ₹0 |
 | Render | Free | ₹0 |
-| PlanetScale | Hobby | ₹0 |
+| TiDB Serverless | Serverless | ₹0 |
 | Gmail SMTP | Free | ₹0 |
 | Keep-Alive | Free | ₹0 |
 | **TOTAL** | | **₹0/month** |
@@ -121,10 +121,11 @@ GitHub Actions will ping your backend every 10 minutes for free.
 - ✅ First request: 30-60s wake-up time
 - ✅ Solution: Use keep-alive service (free)
 
-### PlanetScale Free Tier:
-- ✅ 1GB storage limit
-- ✅ 1 database
-- ✅ Usually enough for 10-50 shops
+### TiDB Serverless Free Tier:
+- ✅ 5GB storage per database
+- ✅ Up to 5 databases
+- ✅ MySQL compatible (no code changes needed)
+- ✅ Usually enough for 50+ shops
 
 ### Vercel Free Tier:
 - ✅ 100GB bandwidth/month
@@ -137,7 +138,7 @@ GitHub Actions will ping your backend every 10 minutes for free.
 **Upgrade only when:**
 - You have 2+ paying customers
 - You need always-on backend (upgrade Render to ₹700/month)
-- Database exceeds 1GB (upgrade PlanetScale to ₹2,900/month)
+- Database exceeds 5GB (upgrade TiDB to paid plan)
 
 **Free tier is perfect for:**
 - Getting started

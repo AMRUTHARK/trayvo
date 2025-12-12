@@ -8,7 +8,7 @@ This guide ensures **completely free** deployment using free tiers only. No cred
 |---------|-----------|-------------|
 | **Vercel** (Frontend) | ✅ Free Forever | Unlimited projects, 100GB bandwidth/month |
 | **Render** (Backend) | ✅ Free Tier | Spins down after 15 min inactivity (wakes up in 30-60s) |
-| **PlanetScale** (Database) | ✅ Free Forever | 1 database, 1GB storage, 1 billion rows |
+| **TiDB Serverless** (Database) | ✅ Free Forever | 5 databases, 5GB storage each, MySQL compatible |
 | **Gmail SMTP** | ✅ Free | 500 emails/day |
 
 **Total Cost: ₹0/month (Completely Free!)**
@@ -34,19 +34,20 @@ This guide ensures **completely free** deployment using free tiers only. No cred
 
 ## 📋 Free Deployment Steps
 
-### Step 1: Database (PlanetScale) - FREE ✅
+### Step 1: Database (TiDB Serverless) - FREE ✅
 
-1. Go to https://planetscale.com
-2. Sign up (free, no credit card)
-3. Create database: `multi_shop_billing`
-4. **Plan:** Select **"Hobby"** (free tier)
-5. Import schema from `database/schema.sql`
-6. Get connection credentials
+1. Go to https://tidbcloud.com
+2. Sign up (free, no credit card required)
+3. Create a new cluster
+4. **Select:** **"Serverless"** tier (free tier)
+5. Create database: `multi_shop_billing`
+6. Import schema from `database/schema.sql`
+7. Get connection credentials (MySQL compatible)
 
 **Free Tier Includes:**
-- 1 database
-- 1GB storage
-- 1 billion rows
+- Up to 5 databases
+- 5GB storage per database
+- MySQL compatible (works with existing code)
 - Automatic backups
 - **No credit card required**
 

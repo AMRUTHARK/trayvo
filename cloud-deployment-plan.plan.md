@@ -12,18 +12,18 @@ This comprehensive guide provides exact step-by-step instructions to deploy your
 
 ```
 ┌─────────────┐      ┌─────────────┐      ┌─────────────┐
-│   Vercel    │──────│    Render    │──────│ PlanetScale │
+│   Vercel    │──────│    Render    │──────│ TiDB Serverless│
 │  (Frontend) │      │   (Backend)  │      │ (Database)  │
 │  Next.js    │      │   Express    │      │   MySQL     │
 │             │      │              │      │             │
-│ Free Tier   │      │ Free/Paid    │      │ Free Tier   │
+│ Free Tier   │      │ Free Tier    │      │ Free Tier   │
 └─────────────┘      └─────────────┘      └─────────────┘
 ```
 
 **Data Flow:**
 - Users access frontend on Vercel
 - Frontend makes API calls to backend on Render
-- Backend queries PlanetScale MySQL database
+- Backend queries TiDB Serverless MySQL database (MySQL compatible)
 - Email invitations sent via SMTP (Gmail)
 
 ---
@@ -114,116 +114,106 @@ multi-shopping-billing/
 
 ---
 
-## Step 2: Database Setup (PlanetScale)
+## Step 2: Database Setup (TiDB Serverless)
 
-### 2.1 Create PlanetScale Account
+### 2.1 Create TiDB Cloud Account
 
-1. Go to https://planetscale.com
-2. Click **"Sign Up"** or **"Get Started"**
+1. Go to https://tidbcloud.com
+2. Click **"Sign Up"** or **"Get Started for Free"**
 3. **Recommended**: Sign up with GitHub (easier integration)
 4. Complete account verification if required
+5. **No credit card required** for free tier
 
-### 2.2 Create Database
+### 2.2 Create Cluster and Database
 
-1. In PlanetScale dashboard, click **"New database"** button
-2. **Database name**: `multi_shop_billing`
-3. **Region**: Choose closest to your users
-   - For India: `ap-south-1` (Mumbai)
-   - For US: `us-east-1` (Virginia)
-   - For Europe: `eu-west-1` (Ireland)
-4. **Plan**: Select **"Hobby"** (free tier)
-   - 1 database
-   - 1GB storage
-   - 1 billion rows
+1. In TiDB Cloud dashboard, click **"Create Cluster"** or **"New Cluster"**
+2. **Select Tier**: Choose **"Serverless"** (free tier)
+3. **Cluster Name**: `multi-shop-billing` (or your preferred name)
+4. **Region**: Choose closest to your users
+   - For India: `ap-southeast-1` (Singapore) or nearest available
+   - For US: `us-east-1` (Virginia) or nearest available
+   - For Europe: `eu-west-1` (Ireland) or nearest available
+5. **Plan Details** (Serverless - Free):
+   - Up to 5 databases
+   - 5GB storage per database
+   - MySQL compatible (works with existing code)
    - Automatic backups
-5. Click **"Create database"**
-6. Wait 1-2 minutes for database provisioning
+6. Click **"Create"** or **"Deploy"**
+7. Wait 2-3 minutes for cluster provisioning
 
-### 2.3 Get Connection Credentials
+### 2.3 Create Database
 
-1. Click on your database name (`multi_shop_billing`)
-2. Click **"Connect"** button (top right)
-3. Select **"General"** connection string type
-4. **Copy the connection string** - it looks like:
-   ```
-   mysql://username:password@host.psdb.cloud:3306/database_name?sslaccept=strict
-   ```
-5. **Parse and save these values separately:**
-   - **Host**: `xxxx.psdb.cloud`
-   - **Username**: `xxxx`
-   - **Password**: `xxxx` (long random string)
-   - **Port**: `3306`
+1. Once cluster is ready, go to your cluster dashboard
+2. Click **"Databases"** tab or **"Create Database"**
+3. **Database name**: `multi_shop_billing`
+4. Click **"Create"**
+
+### 2.4 Get Connection Credentials
+
+1. In your cluster dashboard, click **"Connect"** button
+2. Select **"Standard Connection"** or **"Public Endpoint"**
+3. **Copy the connection details** - you'll see:
+   - **Host**: `xxxx.tidbcloud.com` or similar
+   - **Port**: `4000` (TiDB uses port 4000 for MySQL protocol)
+   - **Username**: Usually `root` or provided username
+   - **Password**: Set during cluster creation or auto-generated
    - **Database**: `multi_shop_billing`
+4. **Save these credentials securely** - you'll need them for Render environment variables
 
-**Important:** Save these credentials securely - you'll need them for Render environment variables.
+**Important Notes:**
+- TiDB Serverless uses **port 4000** (not 3306) for MySQL protocol
+- Connection is MySQL compatible - your existing code works without changes
+- Enable **"Allow Access from Anywhere"** if connecting from Render
 
-### 2.4 Import Database Schema
+### 2.5 Import Database Schema
 
 You have three options to import the schema:
 
-#### Option A: Using PlanetScale CLI (Recommended)
+#### Option A: Using TiDB Cloud Web Console (Recommended)
 
-1. **Install PlanetScale CLI:**
+1. Go to your cluster dashboard
+2. Click **"Chat2Query"** or **"SQL Editor"** tab
+3. Open `database/schema.sql` file from your project
+4. Copy entire contents
+5. Paste into SQL editor
+6. Click **"Run"** or execute the SQL
+7. Wait for execution to complete
+8. Verify tables were created (check database tables list)
+
+#### Option B: Using MySQL Client Directly
+
+1. Use MySQL Workbench, DBeaver, or command line
+2. Connect using credentials from Step 2.4:
    ```bash
-   # Windows (PowerShell)
-   winget install planetscale.cli
-   
-   # Or download from: https://github.com/planetscale/cli/releases
+   mysql -h <tidb-host> -u <username> -p<password> -P 4000 <database> < database/schema.sql
    ```
-
-2. **Login to PlanetScale:**
-   ```bash
-   pscale auth login
-   ```
-   (Opens browser for authentication)
-
-3. **Connect to your database:**
-   ```bash
-   pscale connect multi_shop_billing --port 3307
-   ```
-   This creates a local proxy connection. Note the password shown in output.
-
-4. **In a new terminal, import schema:**
-   ```bash
-   mysql -h 127.0.0.1 -P 3307 -u root -p < database/schema.sql
-   ```
-   (Enter the password from step 3)
-
-5. **Verify import:**
-   ```bash
-   mysql -h 127.0.0.1 -P 3307 -u root -p
-   USE multi_shop_billing;
-   SHOW TABLES;
-   ```
-   Should show: `shops`, `users`, `products`, `categories`, `bills`, `bill_items`, `inventory_transactions`, `login_history`, `registration_tokens`, `hold_bills`, `settings`
-
-#### Option B: Using PlanetScale Web Console
-
-1. Go to your database dashboard
-2. Click **"Branches"** → **"main"** branch
-3. Click **"Console"** tab
-4. Open `database/schema.sql` file from your project
-5. Copy entire contents
-6. Paste into PlanetScale console
-7. Click **"Run"** button
-8. Wait for execution to complete
-9. Verify tables were created (check "Tables" tab)
-
-#### Option C: Using MySQL Client Directly
-
-1. Use MySQL Workbench or command line
-2. Connect using credentials from Step 2.3:
-   ```bash
-   mysql -h <host> -u <username> -p<password> -P 3306 <database> < database/schema.sql
-   ```
+   **Important:** Use port **4000** (not 3306)
 3. Replace placeholders with actual values
 4. Verify tables were created
 
-### 2.5 Verify Schema Import
+#### Option C: Using TiDB CLI (Advanced)
 
-Run this query in PlanetScale console or MySQL client:
+1. Install TiDB CLI (if available) or use standard MySQL client
+2. Connect to TiDB Serverless:
+   ```bash
+   mysql -h <tidb-host> -u <username> -p -P 4000
+   ```
+3. Select database:
+   ```sql
+   USE multi_shop_billing;
+   ```
+4. Import schema:
+   ```bash
+   source database/schema.sql
+   ```
+   Or copy-paste SQL from schema file
+
+### 2.6 Verify Schema Import
+
+Run this query in TiDB Cloud console or MySQL client:
 
 ```sql
+USE multi_shop_billing;
 SHOW TABLES;
 ```
 
@@ -241,6 +231,8 @@ SHOW TABLES;
 - `settings`
 
 If all tables are present, proceed to next step.
+
+**Note:** TiDB Serverless is MySQL compatible, so all your existing MySQL queries and code will work without modification.
 
 ---
 
@@ -342,9 +334,9 @@ Click **"Environment"** tab and add these variables one by one:
 ```
 NODE_ENV=production
 PORT=10000
-DB_HOST=<your-planetscale-host>
-DB_USER=<your-planetscale-username>
-DB_PASSWORD=<your-planetscale-password>
+DB_HOST=<your-tidb-host>
+DB_USER=<your-tidb-username>
+DB_PASSWORD=<your-tidb-password>
 DB_NAME=multi_shop_billing
 DB_PORT=3306
 ```
@@ -388,7 +380,8 @@ Copy the output (64-character hex string) and use as `JWT_SECRET` value.
 
 **Important Notes:**
 - Replace all `<placeholders>` with actual values
-- For `DB_PASSWORD`, use the password from PlanetScale (not the connection string)
+- For `DB_PASSWORD`, use the password from TiDB Serverless (not the connection string)
+- **Important:** TiDB Serverless uses port **4000** (not 3306) for MySQL protocol
 - For `SMTP_PASSWORD`, use the 16-character app password (no spaces)
 - For `FRONTEND_URL`, use placeholder for now - update after Vercel deployment
 
@@ -420,7 +413,7 @@ Copy the output (64-character hex string) and use as `JWT_SECRET` value.
 
 3. **Common Issues:**
    - **Build fails**: Check that `backend/package.json` exists and has correct `start` script
-   - **Database connection error**: Verify PlanetScale credentials
+   - **Database connection error**: Verify TiDB Serverless credentials and port (4000)
    - **Port error**: Ensure `PORT=10000` is set (Render uses port 10000)
 
 ---
@@ -505,13 +498,14 @@ Now that you have the frontend URL, update backend to allow CORS:
 
 ## Step 6: Create Super Admin User
 
-### 6.1 Method A: Using PlanetScale CLI (Recommended)
+### 6.1 Method A: Using MySQL Client with TiDB Serverless
 
 1. **Connect to database:**
    ```bash
-   pscale connect multi_shop_billing --port 3307
+   mysql -h <tidb-host> -u <username> -p -P 4000
    ```
-   Note the password shown in output.
+   **Important:** Use port **4000** (TiDB Serverless uses 4000, not 3306)
+   Enter password when prompted.
 
 2. **Set environment variables locally:**
    ```bash
@@ -540,9 +534,10 @@ Now that you have the frontend URL, update backend to allow CORS:
 
 1. **Create temporary `.env` file in `backend/` directory:**
    ```env
-   DB_HOST=<planetscale-host>
-   DB_USER=<planetscale-username>
-   DB_PASSWORD=<planetscale-password>
+   DB_HOST=<tidb-host>
+   DB_USER=<tidb-username>
+   DB_PASSWORD=<tidb-password>
+   DB_PORT=4000
    DB_NAME=multi_shop_billing
    DB_PORT=3306
    SUPERADMIN_USERNAME=superadmin
@@ -572,7 +567,7 @@ Now that you have the frontend URL, update backend to allow CORS:
 
 If scripts don't work, create super admin manually:
 
-1. Connect to PlanetScale database
+1. Connect to TiDB Serverless database (use port 4000)
 2. Run this SQL (replace values):
    ```sql
    INSERT INTO users (shop_id, username, email, password_hash, role, full_name, is_active)
@@ -771,7 +766,7 @@ Before going live with your first customer, verify:
 ### Monitoring
 - [ ] Render logs accessible
 - [ ] Vercel logs accessible
-- [ ] PlanetScale metrics accessible
+- [ ] TiDB Cloud metrics accessible
 - [ ] Error tracking set up (optional)
 
 ---
@@ -790,18 +785,18 @@ Before going live with your first customer, verify:
 - View page views, performance metrics
 - Enable in project settings (optional)
 
-**PlanetScale Metrics:**
-- Access: PlanetScale dashboard → Your database → "Metrics" tab
+**TiDB Cloud Metrics:**
+- Access: TiDB Cloud dashboard → Your cluster → "Metrics" tab
 - Monitor database usage, connections
 - Set up alerts for storage limits
 
 ### 10.2 Backup Strategy
 
 **Database Backups:**
-- PlanetScale provides automatic daily backups (free tier)
-- Backups retained for 7 days
-- Can restore from any backup point
-- For manual backup, export data via PlanetScale console
+- TiDB Serverless provides automatic backups (free tier)
+- Backups retained according to TiDB Cloud policy
+- Can restore from backups via TiDB Cloud dashboard
+- For manual backup, export data via TiDB Cloud console or MySQL dump
 
 **Code Backups:**
 - GitHub serves as primary backup
@@ -828,16 +823,16 @@ Before going live with your first customer, verify:
 - Better for production use
 - **Recommended**: Upgrade when you have 1+ paying customers
 
-**When to Upgrade PlanetScale:**
+**When to Upgrade TiDB Serverless:**
 
 **Free Tier Limits:**
-- 1 database
-- 1GB storage
-- 1 billion rows
-- Usually sufficient for 10-50 shops
+- Up to 5 databases
+- 5GB storage per database
+- MySQL compatible
+- Usually sufficient for 50+ shops
 
-**Upgrade to Scaler Plan ($29/month):**
-- More storage (5GB)
+**Upgrade to Paid Plan:**
+- More storage
 - Better performance
 - More connections
 - **Consider**: When approaching storage limits or performance issues
@@ -873,7 +868,7 @@ Before going live with your first customer, verify:
    - Verify `server.js` file exists in `backend/` directory
 
 4. **Verify database connection:**
-   - Check PlanetScale credentials
+   - Check TiDB Serverless credentials and port (4000)
    - Test connection string locally
    - Ensure database exists
 
@@ -888,25 +883,26 @@ Before going live with your first customer, verify:
 - Health endpoint works but API calls fail
 
 **Solutions:**
-1. **Verify PlanetScale credentials:**
-   - Check `DB_HOST`, `DB_USER`, `DB_PASSWORD` in Render
-   - Ensure password is correct (long random string)
+1. **Verify TiDB Serverless credentials:**
+   - Check `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_PORT` in Render
+   - **Important:** Ensure `DB_PORT=4000` (TiDB uses 4000, not 3306)
+   - Ensure password is correct
    - Verify database name matches
 
 2. **Check database exists:**
-   - Go to PlanetScale dashboard
+   - Go to TiDB Cloud dashboard
+   - Verify cluster is running
    - Verify database `multi_shop_billing` exists
-   - Check if database is paused (free tier)
 
 3. **Verify schema imported:**
-   - Check PlanetScale console
+   - Check TiDB Cloud console (SQL Editor)
    - Run `SHOW TABLES;`
    - Should show 11 tables
 
 4. **Check network connectivity:**
-   - PlanetScale requires SSL connection
-   - Verify `sslaccept=strict` in connection string
-   - Some networks block MySQL ports
+   - TiDB Serverless requires SSL connection
+   - Verify public endpoint is enabled
+   - Some networks block MySQL ports (4000)
 
 ### CORS Errors
 
@@ -1069,7 +1065,7 @@ Before going live with your first customer, verify:
 |---------|------|--------|
 | Vercel | ₹0/month | Unlimited projects, 100GB bandwidth |
 | Render | ₹0/month | Spins down after 15 min inactivity |
-| PlanetScale | ₹0/month | 1 database, 1GB storage, 1B rows |
+| TiDB Serverless | ₹0/month | 5 databases, 5GB each, MySQL compatible |
 | Gmail SMTP | ₹0/month | 500 emails/day |
 | **Total** | **₹0/month** | Good for testing/1 customer |
 
@@ -1079,7 +1075,7 @@ Before going live with your first customer, verify:
 |---------|------|----------|
 | Vercel | ₹0/month | Free tier usually sufficient |
 | Render Starter | ₹700/month (~$7) | Always-on, no spin-down |
-| PlanetScale | ₹0/month | Free tier sufficient initially |
+| TiDB Serverless | ₹0/month | Free tier sufficient initially |
 | Gmail SMTP | ₹0/month | 500 emails/day sufficient |
 | **Total** | **₹700/month** | Better for 2+ customers |
 
@@ -1111,9 +1107,9 @@ Before going live with your first customer, verify:
 
 ### Database Security
 - ✅ Use strong database passwords
-- ✅ Enable SSL for database connections (PlanetScale default)
+- ✅ Enable SSL for database connections (TiDB Serverless default)
 - ✅ Limit database access to backend only
-- ✅ Regular backups (automatic on PlanetScale)
+- ✅ Regular backups (automatic on TiDB Serverless)
 
 ### Application Security
 - ✅ HTTPS enabled (automatic on Vercel/Render)
@@ -1174,7 +1170,7 @@ Before going live with your first customer, verify:
 ### External Resources
 - **Render Docs**: https://render.com/docs
 - **Vercel Docs**: https://vercel.com/docs
-- **PlanetScale Docs**: https://planetscale.com/docs
+- **TiDB Cloud Docs**: https://docs.pingcap.com/tidbcloud
 - **Next.js Docs**: https://nextjs.org/docs
 - **Express Docs**: https://expressjs.com/
 
@@ -1196,12 +1192,13 @@ Before going live with your first customer, verify:
 NODE_ENV=production
 PORT=10000
 
-# Database (PlanetScale)
-DB_HOST=<planetscale-host>
-DB_USER=<planetscale-username>
-DB_PASSWORD=<planetscale-password>
+# Database (TiDB Serverless)
+# TiDB Serverless is MySQL compatible, uses port 4000 (not 3306)
+DB_HOST=<tidb-host>
+DB_USER=<tidb-username>
+DB_PASSWORD=<tidb-password>
 DB_NAME=multi_shop_billing
-DB_PORT=3306
+DB_PORT=4000
 
 # Security
 JWT_SECRET=<64-char-hex-string>
@@ -1238,7 +1235,7 @@ NEXT_PUBLIC_API_URL=https://your-backend.onrender.com/api
 | Step | Time | Notes |
 |------|------|-------|
 | 1. Prepare Repository | 10 min | Git setup, GitHub push |
-| 2. Database Setup | 20 min | PlanetScale account, schema import |
+| 2. Database Setup | 20 min | TiDB Cloud account, schema import |
 | 3. Email Setup | 15 min | Gmail app password |
 | 4. Backend Deployment | 15 min | Render setup, first deploy |
 | 5. Frontend Deployment | 10 min | Vercel setup, deploy |
