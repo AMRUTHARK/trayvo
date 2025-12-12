@@ -5,6 +5,7 @@ import Layout from '@/components/Layout';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
+import { isSuperAdmin } from '@/lib/auth';
 
 interface CartItem {
   product_id: number;
@@ -33,6 +34,15 @@ export default function POSPage() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [holdBills, setHoldBills] = useState<any[]>([]);
   const [showHoldBills, setShowHoldBills] = useState(false);
+
+  useEffect(() => {
+    // Redirect Super Admin away from POS page
+    if (isSuperAdmin()) {
+      router.push('/superadmin');
+      toast.error('POS Billing is not available for Super Admin');
+      return;
+    }
+  }, [router]);
 
   useEffect(() => {
     if (searchTerm.length > 2) {
