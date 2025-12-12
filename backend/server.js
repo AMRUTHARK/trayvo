@@ -8,6 +8,10 @@ dotenv.config();
 
 const app = express();
 
+// Trust proxy - required when running behind a reverse proxy (Render, Vercel, etc.)
+// This allows express-rate-limit to correctly identify client IPs from X-Forwarded-For header
+app.set('trust proxy', true);
+
 // Middleware
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:3000',
