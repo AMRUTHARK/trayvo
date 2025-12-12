@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import api from '@/lib/api';
 import PasswordInput from '@/components/PasswordInput';
@@ -9,7 +9,7 @@ import toast from 'react-hot-toast';
 // Force dynamic rendering to prevent prerendering issues with useSearchParams
 export const dynamic = 'force-dynamic';
 
-export default function RegisterPage() {
+function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
