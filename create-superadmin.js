@@ -32,12 +32,27 @@ async function createSuperAdmin() {
     }
     
     // Connect to database
-    connection = await mysql.createConnection({
+    const dbConfig = {
       host: process.env.DB_HOST || 'localhost',
       user: process.env.DB_USER || 'root',
       password: process.env.DB_PASSWORD || '',
       database: process.env.DB_NAME || 'multi_shop_billing',
-    });
+      port: parseInt(process.env.DB_PORT) || 3306,
+    };
+
+    // SSL configuration for TiDB Serverless (required)
+    // Enable SSL for TiDB Cloud connections, disable for local development
+    if (process.env.DB_HOST && process.env.DB_HOST.includes('tidbcloud.com')) {
+      dbConfig.ssl = {
+        rejectUnauthorized: true
+      };
+    } else if (process.env.NODE_ENV === 'production') {
+      dbConfig.ssl = {
+        rejectUnauthorized: true
+      };
+    }
+
+    connection = await mysql.createConnection(dbConfig);
 
     console.log('Connected to database');
 
