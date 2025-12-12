@@ -84,7 +84,7 @@ export default function LoginPage() {
       } else if (error.request) {
         // Request was made but no response received
         console.error('No response from server. Is backend running?');
-        toast.error('Cannot connect to server. Please make sure the backend is running on port 5000');
+        toast.error('Cannot connect to server. Please check your backend configuration or try again later.');
       } else {
         // Something else happened
         toast.error(error.message || 'An unexpected error occurred');
