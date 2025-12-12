@@ -122,6 +122,7 @@ export default function SuperAdminPage() {
         gstin: '',
         username: '',
         password: '',
+        sendInvitation: false,
       });
       fetchShops();
     } catch (error: any) {
