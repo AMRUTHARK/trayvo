@@ -338,7 +338,7 @@ export default function InventoryPage() {
                           <div className="mt-2 text-sm">
                             <span className="text-gray-600">New stock will be: </span>
                             <span className="font-semibold text-blue-600">
-                              {currentStock + parseFloat(adjustForm.quantity_change || 0)} {unit}
+                              {currentStock + parseFloat(adjustForm.quantity_change || '0')} {unit}
                             </span>
                           </div>
                         )}
