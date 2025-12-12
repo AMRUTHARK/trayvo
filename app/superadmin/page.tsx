@@ -200,6 +200,7 @@ export default function SuperAdminPage() {
       gstin: shop.gstin || '',
       username: '',
       password: '',
+      sendInvitation: false,
     });
     setShowShopModal(true);
   };
