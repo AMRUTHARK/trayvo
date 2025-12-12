@@ -15,7 +15,7 @@ jobs:
         run: |
           # IMPORTANT: Replace with your actual Render backend URL
           # Example: https://multi-shop-billing-api.onrender.com
-          BACKEND_URL="${BACKEND_URL:-https://your-backend.onrender.com}"
+          BACKEND_URL="${BACKEND_URL:-https://multi-shop-billing-api.onrender.com}"
           
           echo "🔄 Pinging Render backend to keep it alive..."
           echo "URL: $BACKEND_URL/health"
