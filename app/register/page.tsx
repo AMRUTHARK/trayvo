@@ -6,6 +6,9 @@ import api from '@/lib/api';
 import PasswordInput from '@/components/PasswordInput';
 import toast from 'react-hot-toast';
 
+// Force dynamic rendering to prevent prerendering issues with useSearchParams
+export const dynamic = 'force-dynamic';
+
 export default function RegisterPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
