@@ -10,7 +10,14 @@ const pool = mysql.createPool({
   connectionLimit: 10,
   queueLimit: 0,
   enableKeepAlive: true,
-  keepAliveInitialDelay: 0
+  keepAliveInitialDelay: 0,
+  // SSL configuration for TiDB Serverless (required)
+  // Enable SSL for TiDB Cloud connections, disable for local development
+  ssl: process.env.DB_HOST && process.env.DB_HOST.includes('tidbcloud.com') ? {
+    rejectUnauthorized: true
+  } : (process.env.NODE_ENV === 'production' ? {
+    rejectUnauthorized: true
+  } : false)
 });
 
 // Test connection
