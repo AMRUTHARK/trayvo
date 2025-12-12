@@ -338,7 +338,7 @@ DB_HOST=<your-tidb-host>
 DB_USER=<your-tidb-username>
 DB_PASSWORD=<your-tidb-password>
 DB_NAME=multi_shop_billing
-DB_PORT=3306
+DB_PORT=4000
 ```
 
 **Security:**
@@ -539,7 +539,6 @@ Now that you have the frontend URL, update backend to allow CORS:
    DB_PASSWORD=<tidb-password>
    DB_PORT=4000
    DB_NAME=multi_shop_billing
-   DB_PORT=3306
    SUPERADMIN_USERNAME=superadmin
    SUPERADMIN_EMAIL=your-email@gmail.com
    SUPERADMIN_PASSWORD=YourStrongPassword123!

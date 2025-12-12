@@ -193,11 +193,11 @@ If Render's spin-down is unacceptable, consider these alternatives:
 ```env
 NODE_ENV=production
 PORT=10000
-DB_HOST=<planetscale-host>
-DB_USER=<planetscale-user>
-DB_PASSWORD=<planetscale-password>
+DB_HOST=<tidb-host>
+DB_USER=<tidb-username>
+DB_PASSWORD=<tidb-password>
 DB_NAME=multi_shop_billing
-DB_PORT=3306
+DB_PORT=4000
 JWT_SECRET=<generate-using-script>
 JWT_EXPIRES_IN=7d
 FRONTEND_URL=https://your-app.vercel.app
@@ -221,8 +221,8 @@ NEXT_PUBLIC_API_URL=https://your-backend.onrender.com/api
 
 ## ✅ Free Deployment Checklist
 
-- [ ] PlanetScale account created (free)
-- [ ] Database created on free "Hobby" plan
+- [ ] TiDB Cloud account created (free)
+- [ ] TiDB Serverless cluster created (free tier)
 - [ ] Render account created (free)
 - [ ] Backend deployed on free tier
 - [ ] Vercel account created (free)
@@ -238,9 +238,9 @@ NEXT_PUBLIC_API_URL=https://your-backend.onrender.com/api
 ## 💡 Free Tier Best Practices
 
 1. **Use Keep-Alive:** Prevents spin-down delays
-2. **Monitor Usage:** Check PlanetScale storage (1GB free)
+2. **Monitor Usage:** Check TiDB Serverless storage (5GB free)
 3. **Optimize:** Keep database queries efficient
-4. **Backup:** PlanetScale auto-backups are free
+4. **Backup:** TiDB Serverless auto-backups are free
 5. **Scale When Needed:** Upgrade only when you have paying customers
 
 ---
@@ -255,7 +255,7 @@ NEXT_PUBLIC_API_URL=https://your-backend.onrender.com/api
 
 **Upgrade Costs:**
 - Render Starter: ₹700/month (~$7)
-- PlanetScale Scaler: ₹2,900/month (~$29)
+- TiDB Paid Plan: ₹2,900/month (~$29) (only if needed)
 - **Total:** ₹3,600/month (only when needed)
 
 **Free tier is sufficient for:**
@@ -271,7 +271,7 @@ NEXT_PUBLIC_API_URL=https://your-backend.onrender.com/api
 **100% Free Setup:**
 - ✅ Vercel: Free forever
 - ✅ Render: Free (with keep-alive solution)
-- ✅ PlanetScale: Free forever
+- ✅ TiDB Serverless: Free forever
 - ✅ Gmail: Free
 - ✅ Keep-Alive: Free (UptimeRobot/cron-job.org)
 
