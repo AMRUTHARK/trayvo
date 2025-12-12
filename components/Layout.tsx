@@ -46,7 +46,7 @@ export default function Layout({ children }: LayoutProps) {
   const menuItems = [
     ...(isSuperAdmin() ? [{ href: '/superadmin', label: 'Super Admin', icon: '👑' }] : []),
     ...(!isCashier() ? [{ href: '/dashboard', label: 'Dashboard', icon: '📊' }] : []),
-    { href: '/pos', label: 'POS Billing', icon: '🛒' },
+    ...(!isSuperAdmin() ? [{ href: '/pos', label: 'POS Billing', icon: '🛒' }] : []),
     ...(!isCashier() ? [
       { href: '/products', label: 'Products', icon: '📦' },
       { href: '/categories', label: 'Categories', icon: '🏷️' },
