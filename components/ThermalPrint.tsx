@@ -203,10 +203,11 @@ export default function ThermalPrint({ bill }: ThermalPrintProps) {
       printContent += GS + 'V' + '\x41' + '\x03'; // Cut paper
 
       // Try to print using browser print API or ESC/POS
-      if (navigator.serial) {
+      // Type assertion for Web Serial API (not in standard TypeScript types)
+      if ('serial' in navigator && (navigator as any).serial) {
         // Web Serial API (Chrome/Edge)
         try {
-          const port = await navigator.serial.requestPort();
+          const port = await (navigator as any).serial.requestPort();
           await port.open({ baudRate: 9600 });
           const writer = port.writable?.getWriter();
           if (writer) {
