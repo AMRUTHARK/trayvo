@@ -638,6 +638,66 @@ router.post('/shops/:id/users', [
   }
 });
 
+// Delete user from a shop
+router.delete('/shops/:id/users/:userId', async (req, res, next) => {
+  try {
+    const shopId = parseInt(req.params.id);
+    const userId = parseInt(req.params.userId);
+
+    // Verify shop exists
+    const [shops] = await pool.execute('SELECT id FROM shops WHERE id = ?', [shopId]);
+    if (!shops.length) {
+      return res.status(404).json({
+        success: false,
+        message: 'Shop not found'
+      });
+    }
+
+    // Verify user belongs to this shop
+    const [users] = await pool.execute(
+      'SELECT id, role FROM users WHERE id = ? AND shop_id = ?',
+      [userId, shopId]
+    );
+
+    if (!users.length) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found in this shop'
+      });
+    }
+
+    const user = users[0];
+
+    // Prevent deleting the last admin user
+    if (user.role === 'admin') {
+      const [adminCount] = await pool.execute(
+        'SELECT COUNT(*) as count FROM users WHERE shop_id = ? AND role = ? AND is_active = TRUE',
+        [shopId, 'admin']
+      );
+
+      if (adminCount[0].count <= 1) {
+        return res.status(400).json({
+          success: false,
+          message: 'Cannot delete the last admin user. At least one active admin is required for the shop.'
+        });
+      }
+    }
+
+    // Delete the user
+    await pool.execute(
+      'DELETE FROM users WHERE id = ? AND shop_id = ?',
+      [userId, shopId]
+    );
+
+    res.json({
+      success: true,
+      message: 'User deleted successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Send registration invitation for a shop
 router.post('/shops/:id/send-invitation', [
   body('email').isEmail().withMessage('Valid email is required')

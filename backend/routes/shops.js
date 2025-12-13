@@ -282,5 +282,64 @@ router.put('/users/:userId', authorize('admin'), [
   }
 });
 
+// Delete user (admin only)
+router.delete('/users/:userId', authorize('admin'), async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+    const userIdNum = parseInt(userId);
+
+    // Prevent self-deletion
+    if (userIdNum === req.user.id) {
+      return res.status(400).json({
+        success: false,
+        message: 'You cannot delete your own account'
+      });
+    }
+
+    // Verify user belongs to same shop
+    const [users] = await pool.execute(
+      'SELECT id, role FROM users WHERE id = ? AND shop_id = ?',
+      [userIdNum, req.shopId]
+    );
+
+    if (!users.length) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const user = users[0];
+
+    // Prevent deleting the last admin user
+    if (user.role === 'admin') {
+      const [adminCount] = await pool.execute(
+        'SELECT COUNT(*) as count FROM users WHERE shop_id = ? AND role = ? AND is_active = TRUE',
+        [req.shopId, 'admin']
+      );
+
+      if (adminCount[0].count <= 1) {
+        return res.status(400).json({
+          success: false,
+          message: 'Cannot delete the last admin user. At least one active admin is required for the shop.'
+        });
+      }
+    }
+
+    // Delete the user (CASCADE will handle related records like login_history)
+    await pool.execute(
+      'DELETE FROM users WHERE id = ? AND shop_id = ?',
+      [userIdNum, req.shopId]
+    );
+
+    res.json({
+      success: true,
+      message: 'User deleted successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;
 

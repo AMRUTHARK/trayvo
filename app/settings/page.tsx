@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Layout from '@/components/Layout';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
-import { isAdmin } from '@/lib/auth';
+import { isAdmin, getStoredUser } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
 
 export default function SettingsPage() {
@@ -12,6 +12,7 @@ export default function SettingsPage() {
   const [shop, setShop] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deletingUserId, setDeletingUserId] = useState<number | null>(null);
   const [formData, setFormData] = useState({
     shop_name: '',
     owner_name: '',
@@ -55,6 +56,29 @@ export default function SettingsPage() {
       toast.error('Failed to fetch settings');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteUser = async (userId: number) => {
+    const user = getStoredUser();
+    if (user?.id === userId) {
+      toast.error('You cannot delete your own account');
+      return;
+    }
+
+    if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      setDeletingUserId(userId);
+      await api.delete(`/shops/users/${userId}`);
+      toast.success('User deleted successfully');
+      fetchData(); // Refresh the users list
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to delete user');
+    } finally {
+      setDeletingUserId(null);
     }
   };
 
@@ -220,6 +244,7 @@ export default function SettingsPage() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -242,6 +267,20 @@ export default function SettingsPage() {
                       >
                         {user.is_active ? 'Active' : 'Inactive'}
                       </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <button
+                        onClick={() => handleDeleteUser(user.id)}
+                        disabled={deletingUserId === user.id || getStoredUser()?.id === user.id}
+                        className={`text-red-600 hover:text-red-700 ${
+                          deletingUserId === user.id || getStoredUser()?.id === user.id
+                            ? 'opacity-50 cursor-not-allowed'
+                            : ''
+                        }`}
+                        title={getStoredUser()?.id === user.id ? 'You cannot delete your own account' : 'Delete user'}
+                      >
+                        {deletingUserId === user.id ? 'Deleting...' : 'Delete'}
+                      </button>
                     </td>
                   </tr>
                 ))}

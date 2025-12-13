@@ -46,6 +46,7 @@ export default function SuperAdminPage() {
   const [registrationTokens, setRegistrationTokens] = useState<any[]>([]);
   const [loadingTokens, setLoadingTokens] = useState(false);
   const [tokenStatusFilter, setTokenStatusFilter] = useState<'all' | 'active' | 'expired' | 'used'>('all');
+  const [deletingUserId, setDeletingUserId] = useState<number | null>(null);
 
   useEffect(() => {
     fetchShops(statusFilter);
@@ -173,6 +174,25 @@ export default function SuperAdminPage() {
       fetchShopUsers(selectedShop.id);
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Failed to create user');
+    }
+  };
+
+  const handleDeleteUser = async (userId: number) => {
+    if (!selectedShop) return;
+
+    if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      setDeletingUserId(userId);
+      await api.delete(`/superadmin/shops/${selectedShop.id}/users/${userId}`);
+      toast.success('User deleted successfully');
+      fetchShopUsers(selectedShop.id); // Refresh the users list
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to delete user');
+    } finally {
+      setDeletingUserId(null);
     }
   };
 
@@ -731,6 +751,7 @@ export default function SuperAdminPage() {
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Full Name</th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
@@ -752,6 +773,17 @@ export default function SuperAdminPage() {
                           }`}>
                             {user.is_active ? 'Active' : 'Inactive'}
                           </span>
+                        </td>
+                        <td className="px-4 py-2 text-sm text-gray-900">
+                          <button
+                            onClick={() => handleDeleteUser(user.id)}
+                            disabled={deletingUserId === user.id}
+                            className={`text-red-600 hover:text-red-700 ${
+                              deletingUserId === user.id ? 'opacity-50 cursor-not-allowed' : ''
+                            }`}
+                          >
+                            {deletingUserId === user.id ? 'Deleting...' : 'Delete'}
+                          </button>
                         </td>
                       </tr>
                     ))}
