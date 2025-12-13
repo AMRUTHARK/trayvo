@@ -220,45 +220,48 @@ If you did not request this invitation, please ignore this email.
     const info = await Promise.race([sendPromise, timeoutPromise]);
     return { success: true, messageId: info.messageId };
   } catch (error) {
-    // Provide more specific error messages based on email service
-    let errorMessage = error.message;
     const emailService = detectEmailService();
     
-    if (error.code === 'EAUTH' || error.responseCode === 535) {
-      if (emailService === 'sendgrid') {
-        errorMessage = 'SendGrid authentication failed. Please check your SMTP_USER (should be "apikey") and SMTP_PASSWORD (should be your SendGrid API key).';
-      } else if (emailService === 'gmail') {
-        errorMessage = 'Gmail authentication failed. Please check your SMTP_USER and SMTP_PASSWORD. Ensure you are using an App Password (not your regular password).';
-      } else {
-        errorMessage = 'SMTP authentication failed. Please check your SMTP_USER and SMTP_PASSWORD.';
-      }
-    } else if (error.code === 'ECONNECTION' || error.code === 'ETIMEDOUT') {
-      if (emailService === 'sendgrid') {
-        errorMessage = 'Cannot connect to SendGrid SMTP server. Please check SMTP_HOST (should be smtp.sendgrid.net) and SMTP_PORT (should be 587). SendGrid works reliably on Render.';
-      } else {
-        errorMessage = 'Cannot connect to SMTP server. Please check SMTP_HOST and SMTP_PORT, and ensure your network/firewall allows SMTP connections. For Render, consider using SendGrid (smtp.sendgrid.net) which is not blocked.';
-      }
-    } else if (error.code === 'EENVELOPE') {
-      errorMessage = `Invalid email address: ${email}. Please check the recipient email format.`;
-    } else if (error.message.includes('timeout')) {
-      errorMessage = 'Email sending timed out. This might be due to network issues or SMTP server being slow. Please try again.';
-    } else if (error.responseCode === 550 || error.responseCode === 553) {
-      errorMessage = `Email rejected by server. Check if the recipient email address (${email}) is valid and not blocked.`;
+    // Build detailed error message with exact error details
+    let errorDetails = {
+      message: error.message || 'Unknown error',
+      code: error.code || null,
+      responseCode: error.responseCode || null,
+      command: error.command || null,
+      service: emailService,
+    };
+    
+    // Include additional context if available
+    if (error.response) {
+      errorDetails.response = process.env.NODE_ENV === 'development' ? error.response : 'Response available in logs';
     }
     
     // Log detailed error information for debugging
-    console.error('Email sending error details:', {
-      service: emailService,
-      code: error.code,
-      responseCode: error.responseCode,
-      command: error.command,
-      message: error.message,
-      errorMessage: errorMessage,
-      // Only log full response in development (may contain sensitive info)
-      response: process.env.NODE_ENV === 'development' ? error.response : undefined,
-    });
+    console.error('Email sending error details:', errorDetails);
     
-    throw new Error(`Failed to send email: ${errorMessage}`);
+    // Create a detailed error message string
+    const errorMessageParts = [`Error: ${error.message}`];
+    if (error.code) {
+      errorMessageParts.push(`Code: ${error.code}`);
+    }
+    if (error.responseCode) {
+      errorMessageParts.push(`Response Code: ${error.responseCode}`);
+    }
+    if (error.command) {
+      errorMessageParts.push(`Command: ${error.command}`);
+    }
+    
+    const detailedErrorMessage = errorMessageParts.join(' | ');
+    
+    // Create error object with all details
+    const emailError = new Error(detailedErrorMessage);
+    emailError.code = error.code;
+    emailError.responseCode = error.responseCode;
+    emailError.command = error.command;
+    emailError.originalMessage = error.message;
+    emailError.service = emailService;
+    
+    throw emailError;
   }
 };
 

@@ -769,18 +769,20 @@ router.post('/shops/:id/send-invitation', [
         }
       });
     } catch (emailError) {
-      // Error details are already logged in email.js (production logs are simplified)
+      // Error details are already logged in email.js
       
-      // Check if it's a timeout error
-      const isTimeout = emailError.message.includes('timeout') || emailError.message.includes('Timeout');
-      
-      // Return success but with warning so token is still generated
+      // Return success but with exact error details so token is still generated
       res.json({
         success: true,
         message: 'Token generated but email sending failed',
-        warning: isTimeout 
-          ? 'Email sending timed out. The registration link has been generated. Please share it manually or try sending again later.'
-          : (emailError.message || 'Failed to send email. The registration token has been generated and can be shared manually.'),
+        warning: emailError.message || 'Failed to send email. The registration token has been generated and can be shared manually.',
+        error: {
+          message: emailError.message,
+          code: emailError.code,
+          responseCode: emailError.responseCode,
+          command: emailError.command,
+          service: emailError.service
+        },
         data: {
           token,
           email,

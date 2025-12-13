@@ -18,6 +18,8 @@ export default function SuperAdminPage() {
   const [shopUsers, setShopUsers] = useState<any[]>([]);
   const [invitationEmail, setInvitationEmail] = useState('');
   const [sendingInvitation, setSendingInvitation] = useState(false);
+  const [registrationUrl, setRegistrationUrl] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
   const [disablingShop, setDisablingShop] = useState<number | null>(null);
   const [shopForm, setShopForm] = useState({
     shop_name: '',
@@ -42,11 +44,9 @@ export default function SuperAdminPage() {
     full_name: '',
     phone: '',
   });
-  const [showRegistrationLinks, setShowRegistrationLinks] = useState(false);
-  const [registrationTokens, setRegistrationTokens] = useState<any[]>([]);
-  const [loadingTokens, setLoadingTokens] = useState(false);
-  const [tokenStatusFilter, setTokenStatusFilter] = useState<'all' | 'active' | 'expired' | 'used'>('all');
   const [deletingUserId, setDeletingUserId] = useState<number | null>(null);
+  const [shopRegistrationTokens, setShopRegistrationTokens] = useState<any[]>([]);
+  const [loadingShopTokens, setLoadingShopTokens] = useState(false);
 
   useEffect(() => {
     fetchShops(statusFilter);
@@ -204,52 +204,44 @@ export default function SuperAdminPage() {
     }
 
     setSendingInvitation(true);
+    setRegistrationUrl(null);
+    setEmailError(null);
+    
     try {
       const response = await api.post(`/superadmin/shops/${selectedShop.id}/send-invitation`, {
         email: invitationEmail,
       });
       
       if (response.data.warning) {
-        toast.success('Token generated successfully', {
+        // Email failed but token was generated
+        setRegistrationUrl(response.data.data?.registration_url || null);
+        setEmailError(response.data.warning);
+        toast('Token generated but email sending failed', {
+          icon: '⚠️',
           duration: 5000,
         });
-        toast(response.data.warning, {
-          icon: '⚠️',
-          duration: 10000,
-        });
-        // Show registration URL if email failed
-        if (response.data.data?.registration_url) {
-          console.log('Registration URL:', response.data.data.registration_url);
-          toast(`Registration URL: ${response.data.data.registration_url}`, {
-            duration: 15000,
-            icon: '📋',
-          });
-        }
       } else {
+        // Email sent successfully
         toast.success('Registration invitation sent successfully!');
+        setShowInvitationModal(false);
+        setInvitationEmail('');
+        setSelectedShop(null);
+        setRegistrationUrl(null);
+        setEmailError(null);
       }
-      
-      setShowInvitationModal(false);
-      setInvitationEmail('');
-      setSelectedShop(null);
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || 
                            error.response?.data?.warning || 
                            error.message || 
                            'Failed to send invitation';
-      toast.error(errorMessage);
-      
-      // Log full error for debugging
-      console.error('Invitation sending error:', error.response?.data || error);
+      setEmailError(errorMessage);
       
       // If there's a registration URL in the response, show it
       if (error.response?.data?.data?.registration_url) {
-        console.log('Registration URL (manual share):', error.response.data.data.registration_url);
-        toast(`Registration URL: ${error.response.data.data.registration_url}`, {
-          duration: 10000,
-          icon: '📋',
-        });
+        setRegistrationUrl(error.response.data.data.registration_url);
       }
+      
+      toast.error(errorMessage);
     } finally {
       setSendingInvitation(false);
     }
@@ -307,22 +299,20 @@ export default function SuperAdminPage() {
   const openViewUsers = async (shop: any) => {
     setSelectedShop(shop);
     await fetchShopUsers(shop.id);
+    await fetchShopRegistrationTokens(shop.id);
     setShowUserModal(true);
   };
 
-  const fetchRegistrationTokens = async (status?: 'all' | 'active' | 'expired' | 'used') => {
+  const fetchShopRegistrationTokens = async (shopId: number) => {
     try {
-      setLoadingTokens(true);
-      const filterStatus = status || tokenStatusFilter;
-      const url = filterStatus === 'all' 
-        ? '/registration-tokens/all' 
-        : `/registration-tokens/all?status=${filterStatus}`;
-      const response = await api.get(url);
-      setRegistrationTokens(response.data.data);
+      setLoadingShopTokens(true);
+      const response = await api.get(`/registration-tokens/shop/${shopId}`);
+      setShopRegistrationTokens(response.data.data || []);
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to fetch registration tokens');
+      console.error('Failed to fetch registration tokens:', error);
+      setShopRegistrationTokens([]);
     } finally {
-      setLoadingTokens(false);
+      setLoadingShopTokens(false);
     }
   };
 
@@ -335,28 +325,12 @@ export default function SuperAdminPage() {
     }
   };
 
-  useEffect(() => {
-    if (showRegistrationLinks) {
-      fetchRegistrationTokens(tokenStatusFilter);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showRegistrationLinks, tokenStatusFilter]);
-
   return (
     <Layout>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-gray-900">Super Admin - Shop Management</h1>
           <div className="flex gap-3">
-            <button
-              onClick={() => {
-                setShowRegistrationLinks(true);
-                fetchRegistrationTokens();
-              }}
-              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
-            >
-              Registration Links
-            </button>
             <button
               onClick={() => {
                 setEditingShop(null);
@@ -791,6 +765,80 @@ export default function SuperAdminPage() {
                 </table>
               </div>
 
+              {/* Registration Links Section */}
+              <div className="border-t pt-4 mb-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Registration Links</h3>
+                {loadingShopTokens ? (
+                  <div className="text-center text-gray-500 py-4">Loading registration links...</div>
+                ) : shopRegistrationTokens.length === 0 ? (
+                  <div className="text-center text-gray-500 py-4">No registration links found for this shop</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Expires</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {shopRegistrationTokens.map((token: any) => {
+                          const registrationUrl = token.registration_url || `${process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000'}/register?token=${token.token}`;
+                          const isExpired = new Date(token.expires_at) < new Date();
+                          const isUsed = token.used_at !== null;
+                          const isActive = !isExpired && !isUsed;
+                          
+                          return (
+                            <tr key={token.id} className={!isActive ? 'opacity-60' : ''}>
+                              <td className="px-4 py-2 text-sm text-gray-900">{token.email}</td>
+                              <td className="px-4 py-2 text-sm">
+                                {isUsed ? (
+                                  <span className="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
+                                    Used
+                                  </span>
+                                ) : isExpired ? (
+                                  <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
+                                    Expired
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                                    Active
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-4 py-2 text-sm text-gray-900">
+                                {format(new Date(token.expires_at), 'dd MMM yyyy HH:mm')}
+                              </td>
+                              <td className="px-4 py-2 text-sm text-gray-900">
+                                {format(new Date(token.created_at), 'dd MMM yyyy HH:mm')}
+                              </td>
+                              <td className="px-4 py-2 text-sm">
+                                {isActive && (
+                                  <button
+                                    onClick={() => copyToClipboard(registrationUrl, 'Registration link')}
+                                    className="text-blue-600 hover:text-blue-700"
+                                  >
+                                    Copy Link
+                                  </button>
+                                )}
+                                {token.used_at && (
+                                  <span className="text-xs text-gray-500">
+                                    Used: {format(new Date(token.used_at), 'dd MMM yyyy')}
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
               <form onSubmit={handleCreateUser} className="space-y-4 border-t pt-4">
                 <h3 className="font-semibold text-gray-900">Create New User</h3>
                 <div className="grid grid-cols-2 gap-4">
@@ -887,190 +935,118 @@ export default function SuperAdminPage() {
               <p className="text-sm text-gray-600 mb-4">
                 Send a registration invitation email for <strong>{selectedShop.shop_name}</strong> (Shop ID: {selectedShop.id})
               </p>
-              <form onSubmit={handleSendInvitation} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email Address *
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={invitationEmail}
-                    onChange={(e) => setInvitationEmail(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
-                    placeholder="user@example.com"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    The recipient will receive an email with a registration link
-                  </p>
+              
+              {registrationUrl ? (
+                <div className="space-y-4">
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <p className="text-sm font-semibold text-yellow-800 mb-2">⚠️ Email sending failed</p>
+                    {emailError && (
+                      <p className="text-xs text-yellow-700 mb-3">{emailError}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Registration Link (Copy and share manually):
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        readOnly
+                        value={registrationUrl}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-900 text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(registrationUrl);
+                          toast.success('Registration link copied to clipboard!');
+                        }}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      This link will expire in 7 days
+                    </p>
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowInvitationModal(false);
+                        setSelectedShop(null);
+                        setInvitationEmail('');
+                        setRegistrationUrl(null);
+                        setEmailError(null);
+                      }}
+                      className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+                    >
+                      Close
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRegistrationUrl(null);
+                        setEmailError(null);
+                      }}
+                      className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                    >
+                      Try Again
+                    </button>
+                  </div>
                 </div>
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                  <p className="text-xs text-gray-700">
-                    <strong>Note:</strong> The invitation link will expire in 7 days. If email sending is not configured, a registration URL will be generated that you can share manually.
-                  </p>
-                </div>
-                <div className="flex gap-3">
-                  <button
-                    type="submit"
-                    disabled={sendingInvitation}
-                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {sendingInvitation ? 'Sending...' : 'Send Invitation'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowInvitationModal(false);
-                      setSelectedShop(null);
-                      setInvitationEmail('');
-                    }}
-                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* Registration Links Modal */}
-        {showRegistrationLinks && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-y-auto p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-bold text-gray-900">Registration Links</h2>
-                <button
-                  onClick={() => {
-                    setShowRegistrationLinks(false);
-                    setRegistrationTokens([]);
-                  }}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  ✕
-                </button>
-              </div>
-
-              {/* Status Filter */}
-              <div className="flex gap-2 mb-4">
-                <button
-                  onClick={() => setTokenStatusFilter('all')}
-                  className={`px-4 py-2 rounded-lg ${
-                    tokenStatusFilter === 'all'
-                      ? 'bg-purple-600 text-white'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
-                >
-                  All
-                </button>
-                <button
-                  onClick={() => setTokenStatusFilter('active')}
-                  className={`px-4 py-2 rounded-lg ${
-                    tokenStatusFilter === 'active'
-                      ? 'bg-purple-600 text-white'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
-                >
-                  Active
-                </button>
-                <button
-                  onClick={() => setTokenStatusFilter('expired')}
-                  className={`px-4 py-2 rounded-lg ${
-                    tokenStatusFilter === 'expired'
-                      ? 'bg-purple-600 text-white'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
-                >
-                  Expired
-                </button>
-                <button
-                  onClick={() => setTokenStatusFilter('used')}
-                  className={`px-4 py-2 rounded-lg ${
-                    tokenStatusFilter === 'used'
-                      ? 'bg-purple-600 text-white'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
-                >
-                  Used
-                </button>
-              </div>
-
-              {loadingTokens ? (
-                <div className="p-8 text-center text-gray-500">Loading registration links...</div>
-              ) : registrationTokens.length === 0 ? (
-                <div className="p-8 text-center text-gray-500">No registration links found</div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Shop</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Expires</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {registrationTokens.map((token: any) => {
-                        const isExpired = new Date(token.expires_at) < new Date();
-                        const isUsed = token.used_at !== null;
-                        const isActive = !isExpired && !isUsed;
-                        
-                        return (
-                          <tr key={token.id} className={!isActive ? 'opacity-60' : ''}>
-                            <td className="px-4 py-4 whitespace-nowrap">
-                              <div className="text-sm font-medium text-gray-900">{token.shop_name}</div>
-                              <div className="text-xs text-gray-500">ID: {token.shop_id}</div>
-                            </td>
-                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">{token.email}</td>
-                            <td className="px-4 py-4 whitespace-nowrap">
-                              {isUsed ? (
-                                <span className="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
-                                  Used
-                                </span>
-                              ) : isExpired ? (
-                                <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
-                                  Expired
-                                </span>
-                              ) : (
-                                <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                                  Active
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {format(new Date(token.expires_at), 'dd MMM yyyy HH:mm')}
-                            </td>
-                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {format(new Date(token.created_at), 'dd MMM yyyy HH:mm')}
-                            </td>
-                            <td className="px-4 py-4 whitespace-nowrap text-sm">
-                              {isActive && (
-                                <button
-                                  onClick={() => copyToClipboard(token.registration_url, 'Registration link')}
-                                  className="text-blue-600 hover:text-blue-700 mr-3"
-                                >
-                                  Copy Link
-                                </button>
-                              )}
-                              {token.used_at && (
-                                <span className="text-xs text-gray-500">
-                                  Used: {format(new Date(token.used_at), 'dd MMM yyyy')}
-                                </span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                <form onSubmit={handleSendInvitation} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Email Address *
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={invitationEmail}
+                      onChange={(e) => setInvitationEmail(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
+                      placeholder="user@example.com"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      The recipient will receive an email with a registration link
+                    </p>
+                  </div>
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <p className="text-xs text-gray-700">
+                      <strong>Note:</strong> The invitation link will expire in 7 days. If email sending is not configured, a registration URL will be generated that you can share manually.
+                    </p>
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      type="submit"
+                      disabled={sendingInvitation}
+                      className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {sendingInvitation ? 'Sending...' : 'Send Invitation'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowInvitationModal(false);
+                        setSelectedShop(null);
+                        setInvitationEmail('');
+                        setRegistrationUrl(null);
+                        setEmailError(null);
+                      }}
+                      className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
               )}
             </div>
           </div>
         )}
+
       </div>
     </Layout>
   );

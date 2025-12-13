@@ -219,9 +219,16 @@ router.get('/shop/:shopId', [
       [shopId]
     );
 
+    // Add registration URL to each token
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const tokensWithUrl = tokens.map(token => ({
+      ...token,
+      registration_url: `${frontendUrl}/register?token=${token.token}`
+    }));
+
     res.json({
       success: true,
-      data: tokens
+      data: tokensWithUrl
     });
   } catch (error) {
     next(error);
