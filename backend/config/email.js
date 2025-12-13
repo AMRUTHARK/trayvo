@@ -27,9 +27,9 @@ const createTransporter = () => {
       user: process.env.SMTP_USER,
       pass: smtpPassword,
     },
-    connectionTimeout: 20000, // 20 seconds to establish connection
-    greetingTimeout: 20000, // 20 seconds for greeting
-    socketTimeout: 20000, // 20 seconds for socket operations
+    connectionTimeout: 15000, // 15 seconds to establish connection (reduced from 20s)
+    greetingTimeout: 15000, // 15 seconds for greeting
+    socketTimeout: 15000, // 15 seconds for socket operations
     // Additional options for better compatibility
     tls: {
       rejectUnauthorized: false, // Accept self-signed certificates (for some SMTP servers)
@@ -126,13 +126,13 @@ If you did not request this invitation, please ignore this email.
   };
 
   try {
-    // Verify connection before sending
-    await transporter.verify();
+    // Skip verify() for faster connections - sendMail will handle connection internally
+    // verify() can cause unnecessary delays on slow networks (like Render)
     
     // Set a timeout for the email sending operation
     const sendPromise = transporter.sendMail(mailOptions);
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Email sending timeout: Operation took longer than 25 seconds')), 25000);
+      setTimeout(() => reject(new Error('Email sending timeout: Operation took longer than 30 seconds')), 30000);
     });
     
     const info = await Promise.race([sendPromise, timeoutPromise]);
@@ -153,13 +153,19 @@ If you did not request this invitation, please ignore this email.
       errorMessage = `Email rejected by server. Check if the recipient email address (${email}) is valid and not blocked.`;
     }
     
-    console.error('Email sending error details:', {
-      code: error.code,
-      responseCode: error.responseCode,
-      command: error.command,
-      message: error.message,
-      response: error.response,
-    });
+    // Only log detailed error information in development
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Email sending error details:', {
+        code: error.code,
+        responseCode: error.responseCode,
+        command: error.command,
+        message: error.message,
+        response: error.response,
+      });
+    } else {
+      // In production, log a simpler error message
+      console.error(`Email sending failed: ${errorMessage}`);
+    }
     
     throw new Error(`Failed to send email: ${errorMessage}`);
   }

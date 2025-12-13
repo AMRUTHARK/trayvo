@@ -252,12 +252,40 @@ router.post('/shops', [
           }
         } catch (error) {
           // Log error but don't fail shop creation
-          console.error('Error sending invitation:', error);
-          invitationData = {
-            sent: false,
-            warning: error.message || 'Failed to send invitation email. Please check email configuration.',
-            error: error.message
-          };
+          // Error details are already logged in email.js
+          // If token was generated before error, include it; otherwise generate one now
+          if (!invitationData || !invitationData.token) {
+            const generateToken = () => crypto.randomBytes(32).toString('hex');
+            const token = generateToken();
+            const expiresAt = new Date();
+            expiresAt.setDate(expiresAt.getDate() + 7);
+
+            try {
+              await pool.execute(
+                `INSERT INTO registration_tokens (shop_id, token, email, expires_at)
+                 VALUES (?, ?, ?, ?)`,
+                [shopId, token, email, expiresAt]
+              );
+            } catch (tokenError) {
+              // If token insert fails, continue anyway - this is a fallback
+              console.error('Error inserting registration token:', tokenError);
+            }
+
+            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+            const registrationUrl = `${frontendUrl}/register?token=${token}`;
+
+            invitationData = {
+              sent: false,
+              warning: error.message || 'Failed to send invitation email. The registration token has been generated and can be shared manually.',
+              token,
+              email,
+              expires_at: expiresAt,
+              registration_url: registrationUrl
+            };
+          } else {
+            // Token was already generated, just update the warning
+            invitationData.warning = error.message || 'Failed to send invitation email. The registration token has been generated and can be shared manually.';
+          }
         }
       }
 
@@ -635,7 +663,7 @@ router.post('/shops/:id/send-invitation', [
       // Set a timeout wrapper for the entire email operation
       const emailPromise = sendRegistrationInvitation(email, shop.shop_name, id, token, registrationUrl);
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Request timeout: Email operation took too long')), 28000);
+        setTimeout(() => reject(new Error('Request timeout: Email operation took too long')), 30000);
       });
       
       await Promise.race([emailPromise, timeoutPromise]);
@@ -650,7 +678,7 @@ router.post('/shops/:id/send-invitation', [
         }
       });
     } catch (emailError) {
-      console.error('Email sending error:', emailError);
+      // Error details are already logged in email.js (production logs are simplified)
       
       // Check if it's a timeout error
       const isTimeout = emailError.message.includes('timeout') || emailError.message.includes('Timeout');
@@ -661,7 +689,7 @@ router.post('/shops/:id/send-invitation', [
         message: 'Token generated but email sending failed',
         warning: isTimeout 
           ? 'Email sending timed out. The registration link has been generated. Please share it manually or try sending again later.'
-          : (emailError.message || 'Failed to send email. Please check email configuration.'),
+          : (emailError.message || 'Failed to send email. The registration token has been generated and can be shared manually.'),
         data: {
           token,
           email,
