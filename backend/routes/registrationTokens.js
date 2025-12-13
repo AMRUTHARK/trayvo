@@ -228,5 +228,64 @@ router.get('/shop/:shopId', [
   }
 });
 
+// Get all registration tokens with shop info (super admin only)
+router.get('/all', [
+  authenticate,
+  authorize('super_admin')
+], async (req, res, next) => {
+  try {
+    const { status } = req.query; // optional: 'active', 'expired', 'used', or all
+
+    let query = `SELECT 
+      rt.id,
+      rt.token,
+      rt.email,
+      rt.expires_at,
+      rt.used_at,
+      rt.created_at,
+      rt.shop_id,
+      s.shop_name,
+      s.status as shop_status,
+      s.suggested_username,
+      CASE
+        WHEN rt.used_at IS NOT NULL THEN 'used'
+        WHEN rt.expires_at < NOW() THEN 'expired'
+        ELSE 'active'
+      END as token_status
+    FROM registration_tokens rt
+    JOIN shops s ON rt.shop_id = s.id`;
+
+    const params = [];
+    
+    if (status && ['active', 'expired', 'used'].includes(status)) {
+      if (status === 'active') {
+        query += ` WHERE rt.used_at IS NULL AND rt.expires_at >= NOW()`;
+      } else if (status === 'expired') {
+        query += ` WHERE rt.used_at IS NULL AND rt.expires_at < NOW()`;
+      } else if (status === 'used') {
+        query += ` WHERE rt.used_at IS NOT NULL`;
+      }
+    }
+
+    query += ` ORDER BY rt.created_at DESC`;
+
+    const [tokens] = await pool.execute(query, params);
+
+    // Add registration URL to each token
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const tokensWithUrl = tokens.map(token => ({
+      ...token,
+      registration_url: `${frontendUrl}/register?token=${token.token}`
+    }));
+
+    res.json({
+      success: true,
+      data: tokensWithUrl
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;
 

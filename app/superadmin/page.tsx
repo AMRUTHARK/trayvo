@@ -42,6 +42,10 @@ export default function SuperAdminPage() {
     full_name: '',
     phone: '',
   });
+  const [showRegistrationLinks, setShowRegistrationLinks] = useState(false);
+  const [registrationTokens, setRegistrationTokens] = useState<any[]>([]);
+  const [loadingTokens, setLoadingTokens] = useState(false);
+  const [tokenStatusFilter, setTokenStatusFilter] = useState<'all' | 'active' | 'expired' | 'used'>('all');
 
   useEffect(() => {
     fetchShops(statusFilter);
@@ -286,34 +290,77 @@ export default function SuperAdminPage() {
     setShowUserModal(true);
   };
 
+  const fetchRegistrationTokens = async (status?: 'all' | 'active' | 'expired' | 'used') => {
+    try {
+      setLoadingTokens(true);
+      const filterStatus = status || tokenStatusFilter;
+      const url = filterStatus === 'all' 
+        ? '/registration-tokens/all' 
+        : `/registration-tokens/all?status=${filterStatus}`;
+      const response = await api.get(url);
+      setRegistrationTokens(response.data.data);
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to fetch registration tokens');
+    } finally {
+      setLoadingTokens(false);
+    }
+  };
+
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`${label} copied to clipboard!`);
+    } catch (error) {
+      toast.error('Failed to copy to clipboard');
+    }
+  };
+
+  useEffect(() => {
+    if (showRegistrationLinks) {
+      fetchRegistrationTokens(tokenStatusFilter);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showRegistrationLinks, tokenStatusFilter]);
+
   return (
     <Layout>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-gray-900">Super Admin - Shop Management</h1>
-          <button
-            onClick={() => {
-              setEditingShop(null);
-              setShopForm({
-                shop_name: '',
-                owner_name: '',
-                email: '',
-                phone: '',
-                address: '',
-                gstin: '',
-                username: '',
-                password: '',
-                sendInvitation: false,
-                logo_url: '',
-                suggested_username: '',
-              });
-              setLogoPreview(null);
-              setShowShopModal(true);
-            }}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            + Create New Shop
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={() => {
+                setShowRegistrationLinks(true);
+                fetchRegistrationTokens();
+              }}
+              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+            >
+              Registration Links
+            </button>
+            <button
+              onClick={() => {
+                setEditingShop(null);
+                setShopForm({
+                  shop_name: '',
+                  owner_name: '',
+                  email: '',
+                  phone: '',
+                  address: '',
+                  gstin: '',
+                  username: '',
+                  password: '',
+                  sendInvitation: false,
+                  logo_url: '',
+                  suggested_username: '',
+                });
+                setLogoPreview(null);
+                setShowShopModal(true);
+              }}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              + Create New Shop
+            </button>
+          </div>
         </div>
 
         {/* Status Filter */}
@@ -851,6 +898,144 @@ export default function SuperAdminPage() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Registration Links Modal */}
+        {showRegistrationLinks && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-y-auto p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-2xl font-bold text-gray-900">Registration Links</h2>
+                <button
+                  onClick={() => {
+                    setShowRegistrationLinks(false);
+                    setRegistrationTokens([]);
+                  }}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Status Filter */}
+              <div className="flex gap-2 mb-4">
+                <button
+                  onClick={() => setTokenStatusFilter('all')}
+                  className={`px-4 py-2 rounded-lg ${
+                    tokenStatusFilter === 'all'
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => setTokenStatusFilter('active')}
+                  className={`px-4 py-2 rounded-lg ${
+                    tokenStatusFilter === 'active'
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  Active
+                </button>
+                <button
+                  onClick={() => setTokenStatusFilter('expired')}
+                  className={`px-4 py-2 rounded-lg ${
+                    tokenStatusFilter === 'expired'
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  Expired
+                </button>
+                <button
+                  onClick={() => setTokenStatusFilter('used')}
+                  className={`px-4 py-2 rounded-lg ${
+                    tokenStatusFilter === 'used'
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  Used
+                </button>
+              </div>
+
+              {loadingTokens ? (
+                <div className="p-8 text-center text-gray-500">Loading registration links...</div>
+              ) : registrationTokens.length === 0 ? (
+                <div className="p-8 text-center text-gray-500">No registration links found</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Shop</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Expires</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {registrationTokens.map((token: any) => {
+                        const isExpired = new Date(token.expires_at) < new Date();
+                        const isUsed = token.used_at !== null;
+                        const isActive = !isExpired && !isUsed;
+                        
+                        return (
+                          <tr key={token.id} className={!isActive ? 'opacity-60' : ''}>
+                            <td className="px-4 py-4 whitespace-nowrap">
+                              <div className="text-sm font-medium text-gray-900">{token.shop_name}</div>
+                              <div className="text-xs text-gray-500">ID: {token.shop_id}</div>
+                            </td>
+                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">{token.email}</td>
+                            <td className="px-4 py-4 whitespace-nowrap">
+                              {isUsed ? (
+                                <span className="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
+                                  Used
+                                </span>
+                              ) : isExpired ? (
+                                <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
+                                  Expired
+                                </span>
+                              ) : (
+                                <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                                  Active
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {format(new Date(token.expires_at), 'dd MMM yyyy HH:mm')}
+                            </td>
+                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {format(new Date(token.created_at), 'dd MMM yyyy HH:mm')}
+                            </td>
+                            <td className="px-4 py-4 whitespace-nowrap text-sm">
+                              {isActive && (
+                                <button
+                                  onClick={() => copyToClipboard(token.registration_url, 'Registration link')}
+                                  className="text-blue-600 hover:text-blue-700 mr-3"
+                                >
+                                  Copy Link
+                                </button>
+                              )}
+                              {token.used_at && (
+                                <span className="text-xs text-gray-500">
+                                  Used: {format(new Date(token.used_at), 'dd MMM yyyy')}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         )}
