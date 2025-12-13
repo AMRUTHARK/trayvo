@@ -252,6 +252,7 @@ export default function SuperAdminPage() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Users</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Products</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Bills</th>
