@@ -52,6 +52,7 @@ function RegisterForm() {
             shop_id: response.data.data.shop_id.toString(),
             shop_name: response.data.data.shop_name,
             email: response.data.data.email || '',
+            username: response.data.data.suggested_username || '',
           }));
         }
       } catch (error: any) {

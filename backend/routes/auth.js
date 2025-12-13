@@ -150,6 +150,14 @@ router.post('/register', authLimiter, [
         [shop_id, username, email, passwordHash, role, full_name, phone || null]
       );
 
+      // If this is an admin user registering and shop is pending, activate the shop
+      if (role === 'admin') {
+        await connection.execute(
+          `UPDATE shops SET status = 'active' WHERE id = ? AND status = 'pending'`,
+          [shop_id]
+        );
+      }
+
       // Mark token as used
       await connection.execute(
         'UPDATE registration_tokens SET used_at = NOW() WHERE id = ?',

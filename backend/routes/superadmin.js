@@ -27,19 +27,29 @@ router.use(shopIsolation);
 // Get all shops
 router.get('/shops', async (req, res, next) => {
   try {
-    const [shops] = await pool.execute(
-      `SELECT s.*, 
+    const { status } = req.query;
+    
+    let query = `SELECT s.*, 
               s.is_active,
+              s.status,
+              s.suggested_username,
               COUNT(DISTINCT u.id) as user_count,
               COUNT(DISTINCT p.id) as product_count,
               COUNT(DISTINCT b.id) as bill_count
        FROM shops s
        LEFT JOIN users u ON s.id = u.shop_id
        LEFT JOIN products p ON s.id = p.shop_id
-       LEFT JOIN bills b ON s.id = b.shop_id
-       GROUP BY s.id
-       ORDER BY s.created_at DESC`
-    );
+       LEFT JOIN bills b ON s.id = b.shop_id`;
+    
+    const params = [];
+    if (status && (status === 'pending' || status === 'active')) {
+      query += ' WHERE s.status = ?';
+      params.push(status);
+    }
+    
+    query += ' GROUP BY s.id ORDER BY s.created_at DESC';
+
+    const [shops] = await pool.execute(query, params);
 
     res.json({
       success: true,
@@ -91,8 +101,8 @@ router.post('/shops', [
   body('shop_name').trim().notEmpty().withMessage('Shop name is required'),
   body('owner_name').trim().notEmpty().withMessage('Owner name is required'),
   body('email').isEmail().withMessage('Valid email is required'),
-  body('username').trim().isLength({ min: 3 }).withMessage('Username must be at least 3 characters'),
-  body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters')
+  body('username').optional().trim().isLength({ min: 3 }).withMessage('Username must be at least 3 characters'),
+  body('password').optional().isLength({ min: 6 }).withMessage('Password must be at least 6 characters')
 ], async (req, res, next) => {
   try {
     const errors = validationResult(req);
@@ -104,7 +114,16 @@ router.post('/shops', [
       });
     }
 
-    const { shop_name, owner_name, email, phone, address, gstin, username, password, sendInvitation, logo_url } = req.body;
+    const { shop_name, owner_name, email, phone, address, gstin, username, password, sendInvitation, logo_url, suggested_username } = req.body;
+
+    // If sending invitation without username/password, username/password are optional
+    // Otherwise, both username and password are required
+    if (!sendInvitation && (!username || !password)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Username and password are required when not sending invitation'
+      });
+    }
 
     const connection = await pool.getConnection();
     await connection.beginTransaction();
@@ -124,36 +143,44 @@ router.post('/shops', [
         });
       }
 
-      // Create shop
+      // Determine shop status: 'pending' if invite-only (no username/password), 'active' otherwise
+      const shopStatus = (sendInvitation && (!username || !password)) ? 'pending' : 'active';
+      const suggestedUsernameValue = suggested_username || username || null;
+
+      // Create shop with status and suggested_username
       const [shopResult] = await connection.execute(
-        `INSERT INTO shops (shop_name, owner_name, email, phone, address, gstin, logo_url) 
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [shop_name, owner_name, email, phone || null, address || null, gstin || null, logo_url || null]
+        `INSERT INTO shops (shop_name, owner_name, email, phone, address, gstin, logo_url, status, suggested_username) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [shop_name, owner_name, email, phone || null, address || null, gstin || null, logo_url || null, shopStatus, suggestedUsernameValue]
       );
 
       const shopId = shopResult.insertId;
 
-      // Check if username already exists
-      const [existingUser] = await connection.execute(
-        'SELECT id FROM users WHERE shop_id = ? AND username = ?',
-        [shopId, username]
-      );
+      // Only create admin user if both username and password are provided
+      if (username && password) {
+        // Check if username already exists
+        const [existingUser] = await connection.execute(
+          'SELECT id FROM users WHERE shop_id = ? AND username = ?',
+          [shopId, username]
+        );
 
-      if (existingUser.length > 0) {
-        await connection.rollback();
-        return res.status(400).json({
-          success: false,
-          message: 'Username already exists'
-        });
+        if (existingUser.length > 0) {
+          await connection.rollback();
+          connection.release();
+          return res.status(400).json({
+            success: false,
+            message: 'Username already exists'
+          });
+        }
+
+        // Hash password and create admin user
+        const passwordHash = await bcrypt.hash(password, 10);
+        await connection.execute(
+          `INSERT INTO users (shop_id, username, email, password_hash, role, full_name, is_active) 
+           VALUES (?, ?, ?, ?, 'admin', ?, TRUE)`,
+          [shopId, username, email, passwordHash, owner_name]
+        );
       }
-
-      // Hash password and create admin user
-      const passwordHash = await bcrypt.hash(password, 10);
-      await connection.execute(
-        `INSERT INTO users (shop_id, username, email, password_hash, role, full_name, is_active) 
-         VALUES (?, ?, ?, ?, 'admin', ?, TRUE)`,
-        [shopId, username, email, passwordHash, owner_name]
-      );
 
       await connection.commit();
       connection.release();
@@ -234,11 +261,16 @@ router.post('/shops', [
         }
       }
 
+      const message = shopStatus === 'pending' 
+        ? 'Shop created with pending status. Invitation sent. Shop will be activated when admin registers.'
+        : 'Shop and admin user created successfully';
+
       res.status(201).json({
         success: true,
-        message: 'Shop and admin user created successfully',
+        message,
         data: { 
           shop_id: shopId,
+          status: shopStatus,
           ...(invitationData && { invitation: invitationData })
         }
       });

@@ -30,7 +30,9 @@ export default function SuperAdminPage() {
     password: '',
     sendInvitation: false,
     logo_url: '',
+    suggested_username: '',
   });
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'pending'>('all');
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [userForm, setUserForm] = useState({
     username: '',
@@ -42,13 +44,18 @@ export default function SuperAdminPage() {
   });
 
   useEffect(() => {
-    fetchShops();
-  }, []);
+    fetchShops(statusFilter);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter]);
 
-  const fetchShops = async () => {
+  const fetchShops = async (status?: 'all' | 'active' | 'pending') => {
     try {
       setLoading(true);
-      const response = await api.get('/superadmin/shops');
+      const filterStatus = status || statusFilter;
+      const url = filterStatus === 'all' 
+        ? '/superadmin/shops' 
+        : `/superadmin/shops?status=${filterStatus}`;
+      const response = await api.get(url);
       setShops(response.data.data);
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Failed to fetch shops');
@@ -70,7 +77,13 @@ export default function SuperAdminPage() {
     e.preventDefault();
     try {
       const response = await api.post('/superadmin/shops', shopForm);
-      toast.success('Shop created successfully');
+      
+      // Show appropriate message based on shop status
+      if (response.data.data?.status === 'pending') {
+        toast.success('Shop created with pending status. Invitation sent.');
+      } else {
+        toast.success('Shop created successfully');
+      }
       
       // Handle invitation response
       if (response.data.data?.invitation) {
@@ -103,9 +116,10 @@ export default function SuperAdminPage() {
         password: '',
         sendInvitation: false,
         logo_url: '',
+        suggested_username: '',
       });
       setLogoPreview(null);
-      fetchShops();
+      fetchShops(statusFilter);
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Failed to create shop');
     }
@@ -259,6 +273,7 @@ export default function SuperAdminPage() {
       password: '',
       sendInvitation: false,
       logo_url: shop.logo_url || '',
+      suggested_username: shop.suggested_username || '',
     });
     setLogoPreview(shop.logo_url || null);
     setShowShopModal(true);
@@ -289,6 +304,7 @@ export default function SuperAdminPage() {
                 password: '',
                 sendInvitation: false,
                 logo_url: '',
+                suggested_username: '',
               });
               setLogoPreview(null);
               setShowShopModal(true);
@@ -296,6 +312,40 @@ export default function SuperAdminPage() {
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
             + Create New Shop
+          </button>
+        </div>
+
+        {/* Status Filter */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => setStatusFilter('all')}
+            className={`px-4 py-2 rounded-lg ${
+              statusFilter === 'all'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            All Shops
+          </button>
+          <button
+            onClick={() => setStatusFilter('active')}
+            className={`px-4 py-2 rounded-lg ${
+              statusFilter === 'active'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            Active
+          </button>
+          <button
+            onClick={() => setStatusFilter('pending')}
+            className={`px-4 py-2 rounded-lg ${
+              statusFilter === 'pending'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            Pending
           </button>
         </div>
 
@@ -313,6 +363,9 @@ export default function SuperAdminPage() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                    {statusFilter === 'pending' && (
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Suggested Username</th>
+                    )}
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Users</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Products</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Bills</th>
@@ -328,7 +381,11 @@ export default function SuperAdminPage() {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{shop.email}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{shop.phone || '-'}</td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        {shop.is_active ? (
+                        {shop.status === 'pending' ? (
+                          <span className="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                            Pending
+                          </span>
+                        ) : shop.is_active ? (
                           <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
                             Active
                           </span>
@@ -338,6 +395,11 @@ export default function SuperAdminPage() {
                           </span>
                         )}
                       </td>
+                      {statusFilter === 'pending' && (
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {shop.suggested_username || '-'}
+                        </td>
+                      )}
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{shop.user_count || 0}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{shop.product_count || 0}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{shop.bill_count || 0}</td>
@@ -508,29 +570,6 @@ export default function SuperAdminPage() {
                   </div>
                 </div>
                 {!editingShop && (
-                  <div className="grid grid-cols-2 gap-4 pt-4 border-t">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Admin Username *</label>
-                      <input
-                        type="text"
-                        required={!editingShop}
-                        value={shopForm.username}
-                        onChange={(e) => setShopForm({ ...shopForm, username: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Admin Password *</label>
-                      <PasswordInput
-                        required={!editingShop}
-                        value={shopForm.password}
-                        onChange={(e) => setShopForm({ ...shopForm, password: e.target.value })}
-                        placeholder="Enter admin password"
-                      />
-                    </div>
-                  </div>
-                )}
-                {!editingShop && (
                   <div className="pt-4 border-t">
                     <label className="flex items-center">
                       <input
@@ -544,8 +583,45 @@ export default function SuperAdminPage() {
                       </span>
                     </label>
                     <p className="text-xs text-gray-500 mt-1 ml-6">
-                      A registration link will be sent to the shop owner's email address
+                      {shopForm.sendInvitation 
+                        ? 'If sending invite, username/password are optional. The invited user will become the first admin.'
+                        : 'A registration link will be sent to the shop owner\'s email address'}
                     </p>
+                  </div>
+                )}
+                {!editingShop && (
+                  <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {shopForm.sendInvitation ? 'Suggested Username (optional)' : 'Admin Username *'}
+                      </label>
+                      <input
+                        type="text"
+                        required={!shopForm.sendInvitation}
+                        value={shopForm.sendInvitation ? shopForm.suggested_username : shopForm.username}
+                        onChange={(e) => {
+                          if (shopForm.sendInvitation) {
+                            // When sending invitation, update suggested_username
+                            setShopForm({ ...shopForm, suggested_username: e.target.value });
+                          } else {
+                            // When not sending invitation, update username
+                            setShopForm({ ...shopForm, username: e.target.value });
+                          }
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {shopForm.sendInvitation ? 'Admin Password (optional)' : 'Admin Password *'}
+                      </label>
+                      <PasswordInput
+                        required={!shopForm.sendInvitation}
+                        value={shopForm.password}
+                        onChange={(e) => setShopForm({ ...shopForm, password: e.target.value })}
+                        placeholder="Enter admin password"
+                      />
+                    </div>
                   </div>
                 )}
                 <div className="flex gap-3 pt-4">

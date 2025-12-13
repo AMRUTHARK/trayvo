@@ -18,7 +18,7 @@ router.get('/validate/:token', async (req, res, next) => {
     const { token } = req.params;
 
     const [tokens] = await pool.execute(
-      `SELECT rt.*, s.shop_name, s.owner_name 
+      `SELECT rt.*, s.shop_name, s.owner_name, s.suggested_username
        FROM registration_tokens rt
        JOIN shops s ON rt.shop_id = s.id
        WHERE rt.token = ?`,
@@ -56,6 +56,7 @@ router.get('/validate/:token', async (req, res, next) => {
         shop_id: tokenData.shop_id,
         shop_name: tokenData.shop_name,
         email: tokenData.email,
+        suggested_username: tokenData.suggested_username || null,
         expires_at: tokenData.expires_at
       }
     });
