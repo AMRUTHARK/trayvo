@@ -27,13 +27,15 @@ const createTransporter = () => {
       user: process.env.SMTP_USER,
       pass: smtpPassword,
     },
-    connectionTimeout: 15000, // 15 seconds to establish connection (reduced from 20s)
-    greetingTimeout: 15000, // 15 seconds for greeting
-    socketTimeout: 15000, // 15 seconds for socket operations
+    connectionTimeout: 20000, // 20 seconds to establish connection
+    greetingTimeout: 20000, // 20 seconds for greeting
+    socketTimeout: 20000, // 20 seconds for socket operations
     // Additional options for better compatibility
     tls: {
-      rejectUnauthorized: false, // Accept self-signed certificates (for some SMTP servers)
-      ciphers: 'SSLv3', // Use SSLv3 for compatibility
+      // Don't reject self-signed certificates (for some SMTP servers)
+      rejectUnauthorized: false,
+      // Use modern TLS versions - removed deprecated SSLv3 cipher
+      // Let Node.js use default cipher suites (TLS 1.2/1.3 compatible)
     },
     debug: process.env.NODE_ENV === 'development', // Enable debug logging in development
     logger: process.env.NODE_ENV === 'development', // Enable logger in development
@@ -153,19 +155,16 @@ If you did not request this invitation, please ignore this email.
       errorMessage = `Email rejected by server. Check if the recipient email address (${email}) is valid and not blocked.`;
     }
     
-    // Only log detailed error information in development
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Email sending error details:', {
-        code: error.code,
-        responseCode: error.responseCode,
-        command: error.command,
-        message: error.message,
-        response: error.response,
-      });
-    } else {
-      // In production, log a simpler error message
-      console.error(`Email sending failed: ${errorMessage}`);
-    }
+    // Log detailed error information for debugging
+    console.error('Email sending error details:', {
+      code: error.code,
+      responseCode: error.responseCode,
+      command: error.command,
+      message: error.message,
+      errorMessage: errorMessage,
+      // Only log full response in development (may contain sensitive info)
+      response: process.env.NODE_ENV === 'development' ? error.response : undefined,
+    });
     
     throw new Error(`Failed to send email: ${errorMessage}`);
   }
@@ -176,9 +175,47 @@ const isEmailConfigured = () => {
   return !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD);
 };
 
+// Test email configuration by attempting to verify connection
+const testEmailConnection = async () => {
+  try {
+    const transporter = createTransporter();
+    
+    if (!transporter) {
+      return {
+        success: false,
+        error: 'Email service is not configured. Please set SMTP_HOST, SMTP_USER, and SMTP_PASSWORD environment variables.'
+      };
+    }
+
+    // Verify connection
+    await transporter.verify();
+    
+    return {
+      success: true,
+      message: 'Email configuration is valid and connection successful'
+    };
+  } catch (error) {
+    let errorMessage = error.message;
+    
+    if (error.code === 'EAUTH' || error.responseCode === 535) {
+      errorMessage = 'SMTP authentication failed. Please check your SMTP_USER and SMTP_PASSWORD. For Gmail, ensure you are using an App Password (not your regular password).';
+    } else if (error.code === 'ECONNECTION' || error.code === 'ETIMEDOUT') {
+      errorMessage = 'Cannot connect to SMTP server. Please check SMTP_HOST and SMTP_PORT, and ensure your network/firewall allows SMTP connections.';
+    }
+    
+    return {
+      success: false,
+      error: errorMessage,
+      code: error.code,
+      responseCode: error.responseCode
+    };
+  }
+};
+
 module.exports = {
   sendRegistrationInvitation,
   isEmailConfigured,
   createTransporter,
+  testEmailConnection,
 };
 
