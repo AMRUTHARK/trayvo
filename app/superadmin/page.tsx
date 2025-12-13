@@ -18,6 +18,7 @@ export default function SuperAdminPage() {
   const [shopUsers, setShopUsers] = useState<any[]>([]);
   const [invitationEmail, setInvitationEmail] = useState('');
   const [sendingInvitation, setSendingInvitation] = useState(false);
+  const [disablingShop, setDisablingShop] = useState<number | null>(null);
   const [shopForm, setShopForm] = useState({
     shop_name: '',
     owner_name: '',
@@ -260,11 +261,22 @@ export default function SuperAdminPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {shops.map((shop) => (
-                    <tr key={shop.id} className="hover:bg-gray-50">
+                    <tr key={shop.id} className={`hover:bg-gray-50 ${!shop.is_active ? 'opacity-60' : ''}`}>
                       <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{shop.shop_name}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{shop.owner_name}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{shop.email}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{shop.phone || '-'}</td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {shop.is_active ? (
+                          <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                            Active
+                          </span>
+                        ) : (
+                          <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
+                            Disabled
+                          </span>
+                        )}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{shop.user_count || 0}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{shop.product_count || 0}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{shop.bill_count || 0}</td>
@@ -290,10 +302,27 @@ export default function SuperAdminPage() {
                         </button>
                         <button
                           onClick={() => openViewUsers(shop)}
-                          className="text-green-600 hover:text-green-700"
+                          className="text-green-600 hover:text-green-700 mr-3"
                         >
                           Users
                         </button>
+                        {shop.is_active ? (
+                          <button
+                            onClick={() => handleDisableShop(shop.id)}
+                            disabled={disablingShop === shop.id}
+                            className="text-red-600 hover:text-red-700 disabled:opacity-50"
+                          >
+                            {disablingShop === shop.id ? 'Disabling...' : 'Disable'}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleEnableShop(shop.id)}
+                            disabled={disablingShop === shop.id}
+                            className="text-green-600 hover:text-green-700 disabled:opacity-50"
+                          >
+                            {disablingShop === shop.id ? 'Enabling...' : 'Enable'}
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}

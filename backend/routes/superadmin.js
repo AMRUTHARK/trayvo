@@ -29,6 +29,7 @@ router.get('/shops', async (req, res, next) => {
   try {
     const [shops] = await pool.execute(
       `SELECT s.*, 
+              s.is_active,
               COUNT(DISTINCT u.id) as user_count,
               COUNT(DISTINCT p.id) as product_count,
               COUNT(DISTINCT b.id) as bill_count
@@ -342,6 +343,104 @@ router.delete('/shops/:id', async (req, res, next) => {
       success: true,
       message: 'Shop deletion would cascade to all related data. Use with caution. This endpoint needs implementation for soft delete.'
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Disable shop (deactivates shop and all its users)
+router.post('/shops/:id/disable', async (req, res, next) => {
+  try {
+    const shopId = parseInt(req.params.id);
+
+    // Check if shop exists
+    const [shops] = await pool.execute('SELECT id, shop_name FROM shops WHERE id = ?', [shopId]);
+    if (!shops.length) {
+      return res.status(404).json({
+        success: false,
+        message: 'Shop not found'
+      });
+    }
+
+    const connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    try {
+      // Disable the shop
+      await connection.execute(
+        'UPDATE shops SET is_active = FALSE WHERE id = ?',
+        [shopId]
+      );
+
+      // Disable all users of this shop (admin and cashier roles)
+      await connection.execute(
+        `UPDATE users 
+         SET is_active = FALSE 
+         WHERE shop_id = ? AND role IN ('admin', 'cashier')`,
+        [shopId]
+      );
+
+      await connection.commit();
+      connection.release();
+
+      res.json({
+        success: true,
+        message: 'Shop and all its users have been disabled successfully'
+      });
+    } catch (error) {
+      await connection.rollback();
+      connection.release();
+      throw error;
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Enable shop (reactivates shop and all its users)
+router.post('/shops/:id/enable', async (req, res, next) => {
+  try {
+    const shopId = parseInt(req.params.id);
+
+    // Check if shop exists
+    const [shops] = await pool.execute('SELECT id, shop_name FROM shops WHERE id = ?', [shopId]);
+    if (!shops.length) {
+      return res.status(404).json({
+        success: false,
+        message: 'Shop not found'
+      });
+    }
+
+    const connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    try {
+      // Enable the shop
+      await connection.execute(
+        'UPDATE shops SET is_active = TRUE WHERE id = ?',
+        [shopId]
+      );
+
+      // Enable all users of this shop (admin and cashier roles)
+      await connection.execute(
+        `UPDATE users 
+         SET is_active = TRUE 
+         WHERE shop_id = ? AND role IN ('admin', 'cashier')`,
+        [shopId]
+      );
+
+      await connection.commit();
+      connection.release();
+
+      res.json({
+        success: true,
+        message: 'Shop and all its users have been enabled successfully'
+      });
+    } catch (error) {
+      await connection.rollback();
+      connection.release();
+      throw error;
+    }
   } catch (error) {
     next(error);
   }

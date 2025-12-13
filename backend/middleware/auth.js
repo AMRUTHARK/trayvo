@@ -16,7 +16,10 @@ const authenticate = async (req, res, next) => {
     
     // Verify user still exists and is active
     const [users] = await pool.execute(
-      'SELECT id, shop_id, username, role, is_active FROM users WHERE id = ?',
+      `SELECT u.id, u.shop_id, u.username, u.role, u.is_active, s.is_active as shop_active
+       FROM users u
+       LEFT JOIN shops s ON u.shop_id = s.id
+       WHERE u.id = ?`,
       [decoded.userId]
     );
 
@@ -25,6 +28,16 @@ const authenticate = async (req, res, next) => {
         success: false,
         message: 'Invalid or inactive user'
       });
+    }
+
+    // Check if shop is active (for admin and cashier roles)
+    if (users[0].shop_id && users[0].role !== 'super_admin') {
+      if (users[0].shop_active === 0 || users[0].shop_active === false) {
+        return res.status(403).json({
+          success: false,
+          message: 'This shop has been disabled. Please contact your system administrator.'
+        });
+      }
     }
 
     req.user = {
