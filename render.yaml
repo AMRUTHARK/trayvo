@@ -36,19 +36,19 @@ services:
         value: 900000
       - key: RATE_LIMIT_MAX_REQUESTS
         value: 100
-      # Email Configuration
-      # Option 1: SendGrid (Recommended for Render - works reliably, free tier: 100 emails/day)
-      # Option 2: Gmail (May be blocked on Render free tier)
-      - key: SMTP_HOST
-        value: smtp.sendgrid.net  # For SendGrid. Use smtp.gmail.com for Gmail
-      - key: SMTP_PORT
-        value: 587
-      - key: SMTP_USER
-        sync: false  # For SendGrid: use "apikey". For Gmail: use your Gmail address
-      - key: SMTP_PASSWORD
-        sync: false  # For SendGrid: use your SendGrid API key. For Gmail: use app password
+      # Email Configuration - SendGrid Web API (Recommended for Render)
+      # Uses HTTPS (port 443) - much more reliable than SMTP on Render
+      # Free tier: 100 emails/day
+      # Get API key from: https://app.sendgrid.com/settings/api_keys
+      - key: SENDGRID_API_KEY
+        sync: false  # Your SendGrid API key (starts with SG.)
+      - key: SENDGRID_FROM_EMAIL
+        sync: false  # Verified sender email in SendGrid (or use SMTP_FROM_EMAIL for backward compatibility)
+      - key: SENDGRID_FROM_NAME
+        value: Trayvo Billing  # Display name (or use SMTP_FROM_NAME for backward compatibility)
+      # Backward compatibility - these are optional if SENDGRID_* vars are set
       - key: SMTP_FROM_EMAIL
-        sync: false  # Your email address (verified in SendGrid or Gmail)
+        sync: false  # Fallback if SENDGRID_FROM_EMAIL not set
       - key: SMTP_FROM_NAME
-        value: Trayvo Billing
+        value: Trayvo Billing  # Fallback if SENDGRID_FROM_NAME not set
 

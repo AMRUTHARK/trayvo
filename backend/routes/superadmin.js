@@ -731,7 +731,7 @@ router.post('/shops/:id/send-invitation', [
     if (!isEmailConfigured()) {
       return res.status(400).json({
         success: false,
-        message: 'Email service is not configured. Please set SMTP environment variables.'
+        message: 'Email service is not configured. Please set SENDGRID_API_KEY environment variable.'
       });
     }
 

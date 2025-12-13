@@ -1,14 +1,16 @@
 # SendGrid Email Setup Guide
 
-This guide explains how to set up SendGrid for sending registration invitation emails. SendGrid is **recommended for Render deployments** as it works reliably without network restrictions.
+This guide explains how to set up SendGrid for sending registration invitation emails using the **SendGrid Web API**. This is **recommended for Render deployments** as it uses HTTPS (port 443) which is much more reliable than SMTP and eliminates connection timeout issues.
 
-## Why SendGrid?
+## Why SendGrid Web API?
 
-- ✅ **Works reliably on Render** (no SMTP blocking issues)
+- ✅ **Works reliably on Render** (uses HTTPS, no SMTP blocking issues)
+- ✅ **No connection timeouts** (Web API is more stable than SMTP)
 - ✅ **Free forever** (100 emails/day, no credit card required)
 - ✅ **Better deliverability** than Gmail SMTP
 - ✅ **No 2-Step Verification needed**
 - ✅ **Professional email service**
+- ✅ **Faster and more reliable** than SMTP connections
 
 ## Step 1: Create SendGrid Account
 
@@ -28,92 +30,120 @@ This guide explains how to set up SendGrid for sending registration invitation e
    - Format: `SG.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
    - It's a long string starting with `SG.`
 
-## Step 3: Verify Sender Email (Optional but Recommended)
+## Step 3: Verify Sender Email (Required)
 
 1. Go to **Settings** → **Sender Authentication**
 2. Click **"Verify a Single Sender"**
-3. Fill in your email details
+3. Fill in your email details:
+   - **From Email**: Your email address
+   - **From Name**: Your name or company name
+   - **Reply To**: Your email address
+   - **Company Address**: Your business address
 4. Check your email and click the verification link
-5. This improves email deliverability
+5. **This is required** - SendGrid will not send emails from unverified addresses
 
 ## Step 4: Configure in Render
 
 In your Render dashboard → Your Service → Environment Variables, set:
 
 ```
-SMTP_HOST=smtp.sendgrid.net
-SMTP_PORT=587
-SMTP_USER=apikey
-SMTP_PASSWORD=SG.your-actual-api-key-here
+SENDGRID_API_KEY=SG.your-actual-api-key-here
+SENDGRID_FROM_EMAIL=your-verified-email@example.com
+SENDGRID_FROM_NAME=Trayvo Billing
+```
+
+**OR** (for backward compatibility):
+
+```
+SENDGRID_API_KEY=SG.your-actual-api-key-here
 SMTP_FROM_EMAIL=your-verified-email@example.com
 SMTP_FROM_NAME=Trayvo Billing
 ```
 
-**Important Notes:**
-- `SMTP_USER` must be exactly `apikey` (literal string, not your SendGrid username)
-- `SMTP_PASSWORD` is your SendGrid API key (the long string starting with `SG.`)
-- `SMTP_FROM_EMAIL` should be your verified email address
+### Required Variables:
 
-## Step 5: Test Email Sending
+- **SENDGRID_API_KEY** (required): Your SendGrid API key from Step 2
+- **SENDGRID_FROM_EMAIL** or **SMTP_FROM_EMAIL** (required): The verified sender email from Step 3
+- **SENDGRID_FROM_NAME** or **SMTP_FROM_NAME** (optional): Display name for emails (defaults to "Trayvo Billing System")
 
-1. Restart your Render service (to load new environment variables)
-2. Try sending a registration invitation from your application
-3. Check the recipient's inbox (and spam folder)
-4. Check Render logs for any errors
+### Important Notes:
+
+- The `SENDGRID_API_KEY` must start with `SG.`
+- The `FROM_EMAIL` must be verified in SendGrid (Step 3)
+- You can use either `SENDGRID_*` or `SMTP_*` prefix for FROM_EMAIL and FROM_NAME (for backward compatibility)
+- **No SMTP_HOST, SMTP_PORT, SMTP_USER, or SMTP_PASSWORD needed** - Web API doesn't use SMTP
+
+## Step 5: Test the Configuration
+
+1. Deploy your application to Render
+2. Try sending a registration invitation from the superadmin panel
+3. Check the logs if there are any errors
+4. Verify the email is received
 
 ## Troubleshooting
 
-### Email Not Sending
+### Error: "Email service is not configured"
+- Make sure `SENDGRID_API_KEY` is set in Render environment variables
+- Check that the API key starts with `SG.`
 
-1. **Check API Key**: Ensure `SMTP_USER=apikey` (exact string) and `SMTP_PASSWORD` is your full API key
-2. **Check Render Logs**: Look for "Email sending error details" in logs
-3. **Verify Sender**: Make sure sender email is verified in SendGrid
-4. **Check Daily Limit**: Free tier allows 100 emails/day
+### Error: "SENDGRID_FROM_EMAIL is required"
+- Set `SENDGRID_FROM_EMAIL` or `SMTP_FROM_EMAIL` in environment variables
+- Make sure the email is verified in SendGrid dashboard
 
-### Authentication Errors
+### Error: "401 Unauthorized" or "403 Forbidden"
+- Check that your API key is correct
+- Verify the API key has "Mail Send" permissions
+- Make sure you copied the entire API key (it's very long)
 
-- **Error**: "SendGrid authentication failed"
-- **Solution**: 
-  - Verify `SMTP_USER` is exactly `apikey` (not your email)
-  - Verify `SMTP_PASSWORD` is your complete API key (starts with `SG.`)
-  - Check API key hasn't been revoked in SendGrid dashboard
+### Error: "The from address does not match a verified Sender Identity"
+- Go to SendGrid dashboard → Settings → Sender Authentication
+- Verify your sender email address
+- Wait a few minutes after verification for changes to propagate
 
-### Connection Errors
+### Emails not being received
+- Check SendGrid dashboard → Activity Feed to see if emails are being sent
+- Check spam/junk folder
+- Verify the recipient email address is correct
+- Check SendGrid account limits (free tier: 100 emails/day)
 
-- **Error**: "Cannot connect to SendGrid SMTP server"
-- **Solution**: 
-  - Verify `SMTP_HOST=smtp.sendgrid.net`
-  - Verify `SMTP_PORT=587`
-  - Check Render service is running
+## Migration from SMTP
 
-## SendGrid Free Tier Limits
+If you were previously using SMTP configuration:
 
-- **100 emails per day** (resets every 24 hours)
-- **Unlimited days** (free forever)
-- **~3,000 emails per month** (if using full daily limit)
+1. **Remove** these environment variables (no longer needed):
+   - `SMTP_HOST`
+   - `SMTP_PORT`
+   - `SMTP_USER`
+   - `SMTP_PASSWORD`
 
-## Upgrade Options (If Needed)
+2. **Add** these environment variables:
+   - `SENDGRID_API_KEY` (your SendGrid API key)
+   - `SENDGRID_FROM_EMAIL` (or keep `SMTP_FROM_EMAIL` for compatibility)
+   - `SENDGRID_FROM_NAME` (or keep `SMTP_FROM_NAME` for compatibility)
 
-If you need more than 100 emails/day:
-- **Essentials Plan**: $19.95/month = 50,000 emails/month
-- **Pro Plan**: $89.95/month = 100,000 emails/month
+3. **Restart** your Render service
 
-## Comparison: SendGrid vs Gmail
+The application will automatically use the SendGrid Web API instead of SMTP.
 
-| Feature | SendGrid | Gmail SMTP |
-|---------|----------|------------|
-| Works on Render | ✅ Yes | ❌ Often blocked |
-| Free Tier | 100/day | 500/day |
-| Setup Complexity | Easy | Requires App Password |
-| Deliverability | Excellent | Good |
-| Professional | ✅ Yes | ⚠️ Personal email |
+## Benefits of Web API over SMTP
 
-## Next Steps
+1. **No connection timeouts**: Web API uses HTTPS which is more reliable
+2. **Better error messages**: SendGrid API provides detailed error responses
+3. **Faster**: No SMTP handshake required
+4. **More reliable on cloud platforms**: HTTPS is rarely blocked
+5. **Better debugging**: SendGrid dashboard shows detailed sending statistics
 
-After setting up SendGrid:
-1. Test sending an invitation
-2. Monitor SendGrid dashboard for email statistics
-3. Check email deliverability in SendGrid analytics
+## Free Tier Limits
 
-For more help, visit: https://docs.sendgrid.com/
+- **100 emails/day** (free forever)
+- **Unlimited contacts**
+- **Full API access**
+- **Email analytics**
 
+For production use with higher volume, consider upgrading to a paid plan.
+
+## Support
+
+- SendGrid Documentation: https://docs.sendgrid.com
+- SendGrid Support: https://support.sendgrid.com
+- Render Documentation: https://render.com/docs
