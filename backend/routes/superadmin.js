@@ -572,20 +572,6 @@ router.post('/shops/:id/send-invitation', [
       });
     }
 
-    // Use the registration tokens route logic
-    const registrationTokensRouter = require('./registrationTokens');
-    // Create a mock request object for the send-invitation endpoint
-    const mockReq = {
-      body: { shop_id: parseInt(id), email },
-      user: req.user
-    };
-    const mockRes = {
-      json: (data) => res.json(data),
-      status: (code) => ({
-        json: (data) => res.status(code).json(data)
-      })
-    };
-
     // Call the send-invitation handler directly
     const { sendRegistrationInvitation, isEmailConfigured } = require('../config/email');
     const crypto = require('crypto');

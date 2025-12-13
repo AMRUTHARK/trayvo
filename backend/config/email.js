@@ -7,17 +7,36 @@ const createTransporter = () => {
     return null;
   }
 
+  // Remove spaces from password (Gmail app passwords often have spaces when copied)
+  const smtpPassword = (process.env.SMTP_PASSWORD || '').replace(/\s/g, '');
+  
+  // Validate required fields
+  if (!smtpPassword) {
+    throw new Error('SMTP_PASSWORD is required but not set');
+  }
+
+  const smtpPort = parseInt(process.env.SMTP_PORT || '587');
+  const isSecure = smtpPort === 465;
+
   return nodemailer.createTransport({
     host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    secure: process.env.SMTP_PORT === '465', // true for 465, false for other ports
+    port: smtpPort,
+    secure: isSecure, // true for 465 (SSL), false for 587 (TLS)
+    requireTLS: !isSecure && smtpPort === 587, // Require TLS for port 587
     auth: {
       user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASSWORD,
+      pass: smtpPassword,
     },
     connectionTimeout: 20000, // 20 seconds to establish connection
     greetingTimeout: 20000, // 20 seconds for greeting
     socketTimeout: 20000, // 20 seconds for socket operations
+    // Additional options for better compatibility
+    tls: {
+      rejectUnauthorized: false, // Accept self-signed certificates (for some SMTP servers)
+      ciphers: 'SSLv3', // Use SSLv3 for compatibility
+    },
+    debug: process.env.NODE_ENV === 'development', // Enable debug logging in development
+    logger: process.env.NODE_ENV === 'development', // Enable logger in development
   });
 };
 
@@ -107,6 +126,9 @@ If you did not request this invitation, please ignore this email.
   };
 
   try {
+    // Verify connection before sending
+    await transporter.verify();
+    
     // Set a timeout for the email sending operation
     const sendPromise = transporter.sendMail(mailOptions);
     const timeoutPromise = new Promise((_, reject) => {
@@ -116,10 +138,30 @@ If you did not request this invitation, please ignore this email.
     const info = await Promise.race([sendPromise, timeoutPromise]);
     return { success: true, messageId: info.messageId };
   } catch (error) {
-    if (error.message.includes('timeout')) {
-      throw new Error('Email sending timed out. Please try again or check your SMTP configuration.');
+    // Provide more specific error messages
+    let errorMessage = error.message;
+    
+    if (error.code === 'EAUTH' || error.responseCode === 535) {
+      errorMessage = 'SMTP authentication failed. Please check your SMTP_USER and SMTP_PASSWORD. For Gmail, ensure you are using an App Password (not your regular password).';
+    } else if (error.code === 'ECONNECTION' || error.code === 'ETIMEDOUT') {
+      errorMessage = 'Cannot connect to SMTP server. Please check SMTP_HOST and SMTP_PORT, and ensure your network/firewall allows SMTP connections.';
+    } else if (error.code === 'EENVELOPE') {
+      errorMessage = `Invalid email address: ${email}. Please check the recipient email format.`;
+    } else if (error.message.includes('timeout')) {
+      errorMessage = 'Email sending timed out. This might be due to network issues or SMTP server being slow. Please try again.';
+    } else if (error.responseCode === 550 || error.responseCode === 553) {
+      errorMessage = `Email rejected by server. Check if the recipient email address (${email}) is valid and not blocked.`;
     }
-    throw new Error(`Failed to send email: ${error.message}`);
+    
+    console.error('Email sending error details:', {
+      code: error.code,
+      responseCode: error.responseCode,
+      command: error.command,
+      message: error.message,
+      response: error.response,
+    });
+    
+    throw new Error(`Failed to send email: ${errorMessage}`);
   }
 };
 
