@@ -620,10 +620,12 @@ router.post('/shops/:id/send-invitation', [
         }
       });
     } catch (emailError) {
+      console.error('Email sending error:', emailError);
+      // Return success but with warning so token is still generated
       res.json({
         success: true,
         message: 'Token generated but email sending failed',
-        warning: emailError.message,
+        warning: emailError.message || 'Failed to send email. Please check email configuration.',
         data: {
           token,
           email,

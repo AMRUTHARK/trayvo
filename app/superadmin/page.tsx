@@ -170,11 +170,15 @@ export default function SuperAdminPage() {
         });
         toast(response.data.warning, {
           icon: '⚠️',
-          duration: 8000,
+          duration: 10000,
         });
         // Show registration URL if email failed
         if (response.data.data?.registration_url) {
           console.log('Registration URL:', response.data.data.registration_url);
+          toast(`Registration URL: ${response.data.data.registration_url}`, {
+            duration: 15000,
+            icon: '📋',
+          });
         }
       } else {
         toast.success('Registration invitation sent successfully!');
@@ -184,7 +188,23 @@ export default function SuperAdminPage() {
       setInvitationEmail('');
       setSelectedShop(null);
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to send invitation');
+      const errorMessage = error.response?.data?.message || 
+                           error.response?.data?.warning || 
+                           error.message || 
+                           'Failed to send invitation';
+      toast.error(errorMessage);
+      
+      // Log full error for debugging
+      console.error('Invitation sending error:', error.response?.data || error);
+      
+      // If there's a registration URL in the response, show it
+      if (error.response?.data?.data?.registration_url) {
+        console.log('Registration URL (manual share):', error.response.data.data.registration_url);
+        toast(`Registration URL: ${error.response.data.data.registration_url}`, {
+          duration: 10000,
+          icon: '📋',
+        });
+      }
     } finally {
       setSendingInvitation(false);
     }
