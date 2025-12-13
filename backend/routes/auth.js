@@ -415,7 +415,7 @@ router.post('/refresh', authenticate, async (req, res, next) => {
       }
     }
 
-    // Generate new JWT token with same expiration (7 days)
+    // Generate new JWT token with same expiration (30 days default for POS systems)
     const token = jwt.sign(
       { userId: req.user.id, shopId: req.user.shopId, role: req.user.role },
       process.env.JWT_SECRET,
