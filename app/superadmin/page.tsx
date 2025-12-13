@@ -143,9 +143,10 @@ export default function SuperAdminPage() {
         password: '',
         sendInvitation: false,
         logo_url: '',
+        suggested_username: '',
       });
       setLogoPreview(null);
-      fetchShops();
+      fetchShops(statusFilter);
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Failed to update shop');
     }
