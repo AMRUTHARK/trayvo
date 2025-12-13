@@ -226,6 +226,11 @@ router.post('/shops', [
         } catch (error) {
           // Log error but don't fail shop creation
           console.error('Error sending invitation:', error);
+          invitationData = {
+            sent: false,
+            warning: error.message || 'Failed to send invitation email. Please check email configuration.',
+            error: error.message
+          };
         }
       }
 
