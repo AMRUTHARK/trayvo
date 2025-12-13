@@ -104,7 +104,7 @@ router.post('/shops', [
       });
     }
 
-    const { shop_name, owner_name, email, phone, address, gstin, username, password, sendInvitation } = req.body;
+    const { shop_name, owner_name, email, phone, address, gstin, username, password, sendInvitation, logo_url } = req.body;
 
     const connection = await pool.getConnection();
     await connection.beginTransaction();
@@ -126,9 +126,9 @@ router.post('/shops', [
 
       // Create shop
       const [shopResult] = await connection.execute(
-        `INSERT INTO shops (shop_name, owner_name, email, phone, address, gstin) 
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [shop_name, owner_name, email, phone || null, address || null, gstin || null]
+        `INSERT INTO shops (shop_name, owner_name, email, phone, address, gstin, logo_url) 
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [shop_name, owner_name, email, phone || null, address || null, gstin || null, logo_url || null]
       );
 
       const shopId = shopResult.insertId;
@@ -269,7 +269,7 @@ router.put('/shops/:id', [
     }
 
     const shopId = parseInt(req.params.id);
-    const { shop_name, owner_name, email, phone, address, gstin } = req.body;
+    const { shop_name, owner_name, email, phone, address, gstin, logo_url } = req.body;
 
     // Check if shop exists
     const [shops] = await pool.execute('SELECT id FROM shops WHERE id = ?', [shopId]);
@@ -304,6 +304,7 @@ router.put('/shops/:id', [
     if (phone !== undefined) { updates.push('phone = ?'); values.push(phone || null); }
     if (address !== undefined) { updates.push('address = ?'); values.push(address || null); }
     if (gstin !== undefined) { updates.push('gstin = ?'); values.push(gstin || null); }
+    if (logo_url !== undefined) { updates.push('logo_url = ?'); values.push(logo_url || null); }
 
     if (updates.length === 0) {
       return res.status(400).json({

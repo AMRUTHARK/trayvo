@@ -99,10 +99,26 @@ export default function Layout({ children }: LayoutProps) {
           </button>
           <div className="flex items-center space-x-4">
             {user.shop_name && (
-              <>
-                <span className="text-sm text-gray-600">{user.shop_name}</span>
+              <div className="flex items-center space-x-3">
+                {user.shop_logo_url ? (
+                  <ShopLogo 
+                    logoUrl={user.shop_logo_url} 
+                    shopName={user.shop_name} 
+                    size="sm" 
+                    showText={true} 
+                    className="" 
+                  />
+                ) : (
+                  <ShopLogo 
+                    logoUrl={null} 
+                    shopName={user.shop_name} 
+                    size="sm" 
+                    showText={true} 
+                    className="" 
+                  />
+                )}
                 <span className="text-sm text-gray-400">|</span>
-              </>
+              </div>
             )}
             <span className="text-sm text-gray-600">{user.full_name || user.username}</span>
             <span className={`text-xs px-2 py-1 rounded-full ${
@@ -143,9 +159,27 @@ function SidebarContent({
 }) {
   return (
     <>
-      <div className="flex items-center justify-center h-24 px-4" style={{ backgroundColor: 'rgb(74, 106, 177)' }}>
+      <div className="flex items-center justify-center min-h-24 px-4 py-4" style={{ backgroundColor: 'rgb(74, 106, 177)' }}>
         <div className="w-full max-w-[300px]">
-          <CompanyLogo size="md" showText={false} className="text-white" />
+          {user.shop_name && user.shop_logo_url ? (
+            <ShopLogo 
+              logoUrl={user.shop_logo_url} 
+              shopName={user.shop_name} 
+              size="md" 
+              showText={true} 
+              className="text-white" 
+            />
+          ) : user.shop_name ? (
+            <ShopLogo 
+              logoUrl={null} 
+              shopName={user.shop_name} 
+              size="md" 
+              showText={true} 
+              className="text-white" 
+            />
+          ) : (
+            <CompanyLogo size="md" showText={true} className="text-white" />
+          )}
         </div>
       </div>
       <nav className="flex-1 px-4 py-6 space-y-2">

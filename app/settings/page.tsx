@@ -20,7 +20,9 @@ export default function SettingsPage() {
     address: '',
     gstin: '',
     printer_type: '58mm',
+    logo_url: '',
   });
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isAdmin()) {
@@ -46,7 +48,9 @@ export default function SettingsPage() {
         address: shopRes.data.data.address || '',
         gstin: shopRes.data.data.gstin || '',
         printer_type: shopRes.data.data.printer_type || '58mm',
+        logo_url: shopRes.data.data.logo_url || '',
       });
+      setLogoPreview(shopRes.data.data.logo_url || null);
     } catch (error) {
       toast.error('Failed to fetch settings');
     } finally {
@@ -149,6 +153,52 @@ export default function SettingsPage() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
                 rows={3}
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Shop Logo</label>
+              <div className="flex items-center space-x-4">
+                {logoPreview && (
+                  <div className="h-20 w-20 rounded-lg overflow-hidden border-2 border-gray-200 bg-white flex items-center justify-center">
+                    <img src={logoPreview} alt="Logo preview" className="max-w-full max-h-full object-contain p-1" />
+                  </div>
+                )}
+                <div className="flex-1">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        if (file.size > 2 * 1024 * 1024) {
+                          toast.error('Image size must be less than 2MB');
+                          return;
+                        }
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          const base64String = reader.result as string;
+                          setFormData({ ...formData, logo_url: base64String });
+                          setLogoPreview(base64String);
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Recommended: Square image, max 2MB (PNG, JPG)</p>
+                </div>
+                {logoPreview && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormData({ ...formData, logo_url: '' });
+                      setLogoPreview(null);
+                    }}
+                    className="px-3 py-2 text-sm text-red-600 hover:text-red-700"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
             </div>
             <button
               type="submit"

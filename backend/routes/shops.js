@@ -54,7 +54,7 @@ router.put('/', authorize('admin'), [
       });
     }
 
-    const { shop_name, owner_name, email, phone, address, gstin, printer_type, printer_config } = req.body;
+    const { shop_name, owner_name, email, phone, address, gstin, printer_type, printer_config, logo_url } = req.body;
 
     const updateFields = [];
     const updateValues = [];
@@ -90,6 +90,10 @@ router.put('/', authorize('admin'), [
     if (printer_config) {
       updateFields.push('printer_config = ?');
       updateValues.push(JSON.stringify(printer_config));
+    }
+    if (logo_url !== undefined) {
+      updateFields.push('logo_url = ?');
+      updateValues.push(logo_url || null);
     }
 
     if (updateFields.length === 0) {

@@ -210,7 +210,7 @@ router.post('/login', authLimiter, [
     // Find user by username only (shop_id is optional for all roles)
     // Usernames are unique per shop, so this will find the correct user
     let query = `SELECT u.id, u.shop_id, u.username, u.email, u.password_hash, u.role, 
-                        u.full_name, u.is_active, s.shop_name, s.gstin
+                        u.full_name, u.is_active, s.shop_name, s.gstin, s.logo_url as shop_logo_url
                  FROM users u
                  LEFT JOIN shops s ON u.shop_id = s.id
                  WHERE u.username = ?`;
@@ -285,6 +285,7 @@ router.post('/login', authLimiter, [
           role: user.role,
           full_name: user.full_name,
           shop_name: user.shop_name || null,
+          shop_logo_url: user.shop_logo_url || null,
           gstin: user.gstin || null
         }
       }
@@ -299,9 +300,9 @@ router.get('/me', authenticate, async (req, res, next) => {
   try {
     const [users] = await pool.execute(
       `SELECT u.id, u.shop_id, u.username, u.email, u.role, u.full_name, 
-              s.shop_name, s.owner_name, s.gstin, s.phone, s.address
+              s.shop_name, s.owner_name, s.gstin, s.phone, s.address, s.logo_url as shop_logo_url
        FROM users u
-       JOIN shops s ON u.shop_id = s.id
+       LEFT JOIN shops s ON u.shop_id = s.id
        WHERE u.id = ?`,
       [req.user.id]
     );
