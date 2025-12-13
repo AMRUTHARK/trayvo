@@ -166,16 +166,53 @@ If you did not request this invitation, please ignore this email.
   try {
     // SendGrid Web API uses HTTPS (port 443) - much more reliable than SMTP
     // Set timeout to 30 seconds for the HTTP request
-    const response = await Promise.race([
-      sgMail.send(msg),
-      new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Email sending timeout: Operation took longer than 30 seconds')), 30000);
-      }),
-    ]);
+    const sendPromise = sgMail.send(msg);
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Email sending timeout: Operation took longer than 30 seconds')), 30000);
+    });
+    
+    const result = await Promise.race([sendPromise, timeoutPromise]);
+    
+    // SendGrid Web API returns [response, body] array
+    // Handle the response safely to avoid undefined errors
+    let messageId = 'sent';
+    
+    // Log response structure in development for debugging
+    if (process.env.NODE_ENV === 'development') {
+      console.log('SendGrid response structure:', {
+        isArray: Array.isArray(result),
+        resultType: typeof result,
+        resultLength: Array.isArray(result) ? result.length : 'N/A',
+        hasResponse: Array.isArray(result) ? !!result[0] : !!result,
+      });
+    }
+    
+    try {
+      if (Array.isArray(result) && result.length > 0) {
+        // Standard SendGrid response format: [response, body]
+        const response = result[0];
+        if (response && response.headers) {
+          messageId = response.headers['x-message-id'] || 
+                     response.headers['X-Message-Id'] || 
+                     'sent';
+        }
+      } else if (result && typeof result === 'object') {
+        // Check if result itself has headers (direct response object)
+        if (result.headers) {
+          messageId = result.headers['x-message-id'] || 
+                     result.headers['X-Message-Id'] || 
+                     'sent';
+        }
+      }
+    } catch (err) {
+      // If we can't extract message ID, just use 'sent' as default
+      console.warn('Could not extract message ID from SendGrid response:', err.message);
+      messageId = 'sent';
+    }
 
     return { 
       success: true, 
-      messageId: response[0]?.headers?.['x-message-id'] || 'sent' 
+      messageId: messageId
     };
   } catch (error) {
     // Build detailed error message with exact error details
