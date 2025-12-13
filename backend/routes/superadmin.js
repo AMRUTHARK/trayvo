@@ -613,7 +613,13 @@ router.post('/shops/:id/send-invitation', [
     const registrationUrl = `${frontendUrl}/register?token=${token}`;
 
     try {
-      await sendRegistrationInvitation(email, shop.shop_name, id, token, registrationUrl);
+      // Set a timeout wrapper for the entire email operation
+      const emailPromise = sendRegistrationInvitation(email, shop.shop_name, id, token, registrationUrl);
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Request timeout: Email operation took too long')), 28000);
+      });
+      
+      await Promise.race([emailPromise, timeoutPromise]);
       
       res.json({
         success: true,
@@ -626,11 +632,17 @@ router.post('/shops/:id/send-invitation', [
       });
     } catch (emailError) {
       console.error('Email sending error:', emailError);
+      
+      // Check if it's a timeout error
+      const isTimeout = emailError.message.includes('timeout') || emailError.message.includes('Timeout');
+      
       // Return success but with warning so token is still generated
       res.json({
         success: true,
         message: 'Token generated but email sending failed',
-        warning: emailError.message || 'Failed to send email. Please check email configuration.',
+        warning: isTimeout 
+          ? 'Email sending timed out. The registration link has been generated. Please share it manually or try sending again later.'
+          : (emailError.message || 'Failed to send email. Please check email configuration.'),
         data: {
           token,
           email,

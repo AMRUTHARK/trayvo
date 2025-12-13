@@ -15,6 +15,9 @@ const createTransporter = () => {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASSWORD,
     },
+    connectionTimeout: 20000, // 20 seconds to establish connection
+    greetingTimeout: 20000, // 20 seconds for greeting
+    socketTimeout: 20000, // 20 seconds for socket operations
   });
 };
 
@@ -104,9 +107,18 @@ If you did not request this invitation, please ignore this email.
   };
 
   try {
-    const info = await transporter.sendMail(mailOptions);
+    // Set a timeout for the email sending operation
+    const sendPromise = transporter.sendMail(mailOptions);
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Email sending timeout: Operation took longer than 25 seconds')), 25000);
+    });
+    
+    const info = await Promise.race([sendPromise, timeoutPromise]);
     return { success: true, messageId: info.messageId };
   } catch (error) {
+    if (error.message.includes('timeout')) {
+      throw new Error('Email sending timed out. Please try again or check your SMTP configuration.');
+    }
     throw new Error(`Failed to send email: ${error.message}`);
   }
 };
