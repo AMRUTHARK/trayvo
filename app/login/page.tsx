@@ -155,7 +155,7 @@ export default function LoginPage() {
               className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
             />
             <label htmlFor="superadmin" className="ml-2 block text-sm text-gray-700">
-              Login as Super Admin
+              Login as System Administrator
             </label>
           </div>
 
