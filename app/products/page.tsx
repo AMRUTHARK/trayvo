@@ -525,18 +525,38 @@ export default function ProductsPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                    <select
-                      value={formData.category_id}
-                      onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
-                    >
-                      <option value="">Select Category</option>
-                      {categories.map((cat) => (
-                        <option key={cat.id} value={cat.id}>
-                          {cat.name}
-                        </option>
-                      ))}
-                    </select>
+                    {categories.length === 0 ? (
+                      <div className="w-full px-4 py-3 border-2 border-dashed border-yellow-300 rounded-lg bg-yellow-50">
+                        <div className="flex items-start space-x-2">
+                          <span className="text-yellow-600 text-lg">⚠️</span>
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-yellow-800 mb-1">No categories available</p>
+                            <p className="text-xs text-yellow-700 mb-2">
+                              Please create a category first before adding products for better organization.
+                            </p>
+                            <a
+                              href="/categories"
+                              className="inline-flex items-center text-xs font-medium text-yellow-700 hover:text-yellow-800 underline"
+                            >
+                              Go to Categories →
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <select
+                        value={formData.category_id}
+                        onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
+                      >
+                        <option value="">Select Category (Optional)</option>
+                        {categories.map((cat) => (
+                          <option key={cat.id} value={cat.id}>
+                            {cat.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
