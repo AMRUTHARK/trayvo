@@ -328,7 +328,7 @@ router.post('/login', authLimiter, [
     const token = jwt.sign(
       { userId: user.id, shopId: user.shop_id, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      { expiresIn: process.env.JWT_EXPIRES_IN || '30d' }
     );
 
     // Log successful login attempt
@@ -379,6 +379,53 @@ router.get('/me', authenticate, async (req, res, next) => {
     res.json({
       success: true,
       data: users[0]
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Refresh token endpoint - extends session without requiring re-login
+router.post('/refresh', authenticate, async (req, res, next) => {
+  try {
+    // User is already authenticated via middleware
+    // Verify user still exists and is active
+    const [users] = await pool.execute(
+      `SELECT u.id, u.shop_id, u.username, u.role, u.is_active, s.is_active as shop_active
+       FROM users u
+       LEFT JOIN shops s ON u.shop_id = s.id
+       WHERE u.id = ?`,
+      [req.user.id]
+    );
+
+    if (!users.length || !users[0].is_active) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not found or inactive'
+      });
+    }
+
+    // Check if shop is active (for admin and cashier roles)
+    if (users[0].shop_id && users[0].role !== 'super_admin') {
+      if (users[0].shop_active === 0 || users[0].shop_active === false) {
+        return res.status(403).json({
+          success: false,
+          message: 'This shop has been disabled. Please contact your system administrator.'
+        });
+      }
+    }
+
+    // Generate new JWT token with same expiration (7 days)
+    const token = jwt.sign(
+      { userId: req.user.id, shopId: req.user.shopId, role: req.user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN || '30d' }
+    );
+
+    res.json({
+      success: true,
+      token,
+      message: 'Token refreshed successfully'
     });
   } catch (error) {
     next(error);

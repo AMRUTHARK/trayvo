@@ -4,8 +4,6 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { getStoredUser, clearAuth, isAdmin, isSuperAdmin, isCashier } from '@/lib/auth';
-import { useSessionTimeout } from '@/lib/useSessionTimeout';
-import SessionWarningModal from '@/components/SessionWarningModal';
 import CompanyLogo from '@/components/CompanyLogo';
 import ShopLogo from '@/components/ShopLogo';
 import toast from 'react-hot-toast';
@@ -30,9 +28,6 @@ export default function Layout({ children }: LayoutProps) {
     }
     setUser(storedUser);
   }, [router]);
-  
-  // Session timeout management (only when user is authenticated)
-  const { showWarning, timeRemaining, resetSession, logoutNow } = useSessionTimeout();
 
   const handleLogout = () => {
     clearAuth();
@@ -135,14 +130,6 @@ export default function Layout({ children }: LayoutProps) {
         {/* Page content */}
         <main className="p-6">{children}</main>
       </div>
-      
-      {/* Session Warning Modal */}
-      <SessionWarningModal
-        isOpen={showWarning}
-        timeRemaining={timeRemaining}
-        onStayLoggedIn={resetSession}
-        onLogoutNow={logoutNow}
-      />
     </div>
   );
 }
