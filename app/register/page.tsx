@@ -27,6 +27,7 @@ function RegisterForm() {
     password: '',
     confirmPassword: '',
     role: 'cashier',
+    gstin: '',
   });
   const [selectedGstRates, setSelectedGstRates] = useState<string[]>(['0']); // Default: 0% selected
   const availableGstRates = [
@@ -106,6 +107,7 @@ function RegisterForm() {
         password: formData.password,
         role: formData.role,
         ...(gstRatesToSubmit && { gst_rates: gstRatesToSubmit }),
+        ...(formData.role === 'admin' && formData.gstin && { gstin: formData.gstin.trim() }),
       });
 
       if (response.data.success) {
@@ -302,47 +304,73 @@ function RegisterForm() {
             </div>
           </div>
 
-          {/* GST Rate Selection - Only for Admin */}
+          {/* Shop Details - Only for Admin */}
           {formData.role === 'admin' && (
-            <div className="border-t pt-6">
-              <label className="block text-sm font-medium text-gray-700 mb-3">
-                Select GST Rates for Your Shop *
-              </label>
-              <p className="text-xs text-gray-500 mb-3">
-                Select the GST rates your shop will use. You can change this later in settings. 0% is always included.
-              </p>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {availableGstRates.map((rate) => {
-                  const isSelected = selectedGstRates.includes(rate.value);
-                  const isZeroRate = rate.value === '0';
-                  
-                  return (
-                    <label
-                      key={rate.value}
-                      className={`flex items-center p-3 border rounded-lg cursor-pointer transition-colors ${
-                        isSelected || isZeroRate
-                          ? 'bg-blue-50 border-blue-500 text-blue-700'
-                          : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-                      } ${isZeroRate ? 'opacity-75' : ''}`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isSelected || isZeroRate}
-                        disabled={isZeroRate}
-                        onChange={(e) => {
-                          if (isZeroRate) return; // 0% is always included
-                          if (e.target.checked) {
-                            setSelectedGstRates([...selectedGstRates, rate.value]);
-                          } else {
-                            setSelectedGstRates(selectedGstRates.filter(r => r !== rate.value));
-                          }
-                        }}
-                        className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                      />
-                      <span className="text-sm font-medium">{rate.label}</span>
-                    </label>
-                  );
-                })}
+            <div className="border-t pt-6 space-y-6">
+              {/* GSTIN Field */}
+              <div>
+                <label htmlFor="gstin" className="block text-sm font-medium text-gray-700 mb-2">
+                  GSTIN (Optional)
+                </label>
+                <input
+                  id="gstin"
+                  type="text"
+                  maxLength={15}
+                  value={formData.gstin}
+                  onChange={(e) => {
+                    // Convert to uppercase and allow only alphanumeric
+                    const value = e.target.value.toUpperCase().replace(/[^0-9A-Z]/g, '');
+                    setFormData({ ...formData, gstin: value });
+                  }}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
+                  placeholder="22AAAAA0000A1Z5 (15 characters)"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Goods and Services Tax Identification Number (optional). Format: 15 alphanumeric characters.
+                </p>
+              </div>
+
+              {/* GST Rate Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  Select GST Rates for Your Shop *
+                </label>
+                <p className="text-xs text-gray-500 mb-3">
+                  Select the GST rates your shop will use. You can change this later in settings. 0% is always included.
+                </p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {availableGstRates.map((rate) => {
+                    const isSelected = selectedGstRates.includes(rate.value);
+                    const isZeroRate = rate.value === '0';
+                    
+                    return (
+                      <label
+                        key={rate.value}
+                        className={`flex items-center p-3 border rounded-lg cursor-pointer transition-colors ${
+                          isSelected || isZeroRate
+                            ? 'bg-blue-50 border-blue-500 text-blue-700'
+                            : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                        } ${isZeroRate ? 'opacity-75' : ''}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected || isZeroRate}
+                          disabled={isZeroRate}
+                          onChange={(e) => {
+                            if (isZeroRate) return; // 0% is always included
+                            if (e.target.checked) {
+                              setSelectedGstRates([...selectedGstRates, rate.value]);
+                            } else {
+                              setSelectedGstRates(selectedGstRates.filter(r => r !== rate.value));
+                            }
+                          }}
+                          className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        />
+                        <span className="text-sm font-medium">{rate.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           )}

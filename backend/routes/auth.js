@@ -57,7 +57,18 @@ router.post('/register', authLimiter, [
   body('username').trim().isLength({ min: 3 }).withMessage('Username must be at least 3 characters'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
   body('role').isIn(['admin', 'cashier']).withMessage('Role must be admin or cashier'),
-  body('gst_rates').optional().isArray().withMessage('GST rates must be an array')
+  body('gst_rates').optional().isArray().withMessage('GST rates must be an array'),
+  body('gstin').optional().trim().isLength({ max: 15 }).withMessage('GSTIN must be at most 15 characters')
+    .custom((value) => {
+      if (!value || value.trim() === '') return true; // Optional field
+      // GSTIN format: 15 alphanumeric characters
+      // Pattern: [0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}
+      const gstinPattern = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+      if (!gstinPattern.test(value)) {
+        throw new Error('GSTIN must be in valid format (15 alphanumeric characters, e.g., 22AAAAA0000A1Z5)');
+      }
+      return true;
+    })
 ], async (req, res, next) => {
   try {
     const errors = validationResult(req);
@@ -191,6 +202,14 @@ router.post('/register', authLimiter, [
           await connection.execute(
             `UPDATE shops SET gst_rates = ? WHERE id = ?`,
             [processedGstRates, shop_id]
+          );
+        }
+        
+        // Update GSTIN if provided
+        if (gstin && gstin.trim()) {
+          await connection.execute(
+            `UPDATE shops SET gstin = ? WHERE id = ?`,
+            [gstin.trim().toUpperCase(), shop_id]
           );
         }
       }
