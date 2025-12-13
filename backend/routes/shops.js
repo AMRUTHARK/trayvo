@@ -14,7 +14,7 @@ router.use(shopIsolation);
 router.get('/', async (req, res, next) => {
   try {
     const [shops] = await pool.execute(
-      'SELECT id, shop_name, owner_name, email, phone, address, gstin, logo_url, printer_type, printer_config, created_at FROM shops WHERE id = ?',
+      'SELECT id, shop_name, owner_name, email, phone, address, gstin, gst_rates, logo_url, printer_type, printer_config, created_at FROM shops WHERE id = ?',
       [req.shopId]
     );
 
@@ -25,9 +25,25 @@ router.get('/', async (req, res, next) => {
       });
     }
 
+    const shop = shops[0];
+    
+    // Parse gst_rates JSON if present, or return all rates for backward compatibility
+    let gstRates = null;
+    if (shop.gst_rates) {
+      try {
+        gstRates = typeof shop.gst_rates === 'string' ? JSON.parse(shop.gst_rates) : shop.gst_rates;
+      } catch (e) {
+        // If parsing fails, treat as null (all rates available)
+        gstRates = null;
+      }
+    }
+
     res.json({
       success: true,
-      data: shops[0]
+      data: {
+        ...shop,
+        gst_rates: gstRates
+      }
     });
   } catch (error) {
     next(error);

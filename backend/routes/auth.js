@@ -56,7 +56,8 @@ router.post('/register', authLimiter, [
   body('email').isEmail().withMessage('Valid email is required'),
   body('username').trim().isLength({ min: 3 }).withMessage('Username must be at least 3 characters'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
-  body('role').isIn(['admin', 'cashier']).withMessage('Role must be admin or cashier')
+  body('role').isIn(['admin', 'cashier']).withMessage('Role must be admin or cashier'),
+  body('gst_rates').optional().isArray().withMessage('GST rates must be an array')
 ], async (req, res, next) => {
   try {
     const errors = validationResult(req);
@@ -68,7 +69,34 @@ router.post('/register', authLimiter, [
       });
     }
 
-    const { registration_token, full_name, email, phone, username, password, role } = req.body;
+    const { registration_token, full_name, email, phone, username, password, role, gst_rates } = req.body;
+
+    // Validate GST rates if provided (only for admin role)
+    const validGstRates = ['0', '0.25', '3', '5', '12', '18', '28'];
+    let processedGstRates = null;
+    
+    if (gst_rates !== undefined && role === 'admin') {
+      if (!Array.isArray(gst_rates)) {
+        return res.status(400).json({
+          success: false,
+          message: 'GST rates must be an array'
+        });
+      }
+      
+      // Validate each rate is valid
+      const invalidRates = gst_rates.filter(rate => !validGstRates.includes(String(rate)));
+      if (invalidRates.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid GST rates: ${invalidRates.join(', ')}. Valid rates are: ${validGstRates.join(', ')}`
+        });
+      }
+      
+      // Ensure "0" is always included
+      const ratesSet = new Set(gst_rates.map(r => String(r)));
+      ratesSet.add('0');
+      processedGstRates = JSON.stringify(Array.from(ratesSet).sort((a, b) => parseFloat(a) - parseFloat(b)));
+    }
 
     // Validate registration token
     const [tokens] = await pool.execute(
@@ -150,12 +178,21 @@ router.post('/register', authLimiter, [
         [shop_id, username, email, passwordHash, role, full_name, phone || null]
       );
 
-      // If this is an admin user registering and shop is pending, activate the shop
+      // If this is an admin user registering
       if (role === 'admin') {
+        // Activate the shop if pending
         await connection.execute(
           `UPDATE shops SET status = 'active' WHERE id = ? AND status = 'pending'`,
           [shop_id]
         );
+        
+        // Update GST rates if provided
+        if (processedGstRates !== null) {
+          await connection.execute(
+            `UPDATE shops SET gst_rates = ? WHERE id = ?`,
+            [processedGstRates, shop_id]
+          );
+        }
       }
 
       // Mark token as used
@@ -215,8 +252,10 @@ router.post('/login', authLimiter, [
 
     const { username, password, shop_id } = req.body;
 
-    // Find user by username only (shop_id is optional for all roles)
-    // Usernames are unique per shop, so this will find the correct user
+    // Strict role-based filtering to prevent security vulnerability
+    // When shop_id is null (explicit): search only for super_admin users
+    // When shop_id is undefined/empty (not provided): search only for admin/cashier users
+    // When shop_id is a number: search for admin/cashier users with that specific shop_id
     let query = `SELECT u.id, u.shop_id, u.username, u.email, u.password_hash, u.role, 
                         u.full_name, u.is_active, s.shop_name, s.gstin, s.logo_url as shop_logo_url
                  FROM users u
@@ -224,17 +263,32 @@ router.post('/login', authLimiter, [
                  WHERE u.username = ?`;
     let params = [username];
 
-    // If shop_id is explicitly provided and not null, use it for additional validation
-    // Otherwise, find user by username only (works for all roles: admin, cashier, super_admin)
-    if (shop_id !== null && shop_id !== undefined && shop_id !== '') {
-      // Optional: if shop_id is provided, validate it matches the user's shop
-      query += ' AND u.shop_id = ?';
-      params.push(parseInt(shop_id));
+    // Strict role-based filtering based on shop_id presence
+    if (shop_id === null) {
+      // shop_id explicitly null (superadmin checkbox checked) - search only for super_admin users
+      query += ' AND u.shop_id IS NULL AND u.role = ?';
+      params.push('super_admin');
+    } else if (shop_id === undefined || shop_id === '') {
+      // shop_id not provided (regular user login) - search only for regular users (admin/cashier)
+      // Don't filter by shop_id value, just exclude superadmins
+      query += ' AND u.shop_id IS NOT NULL AND u.role IN (?, ?)';
+      params.push('admin', 'cashier');
+    } else {
+      // shop_id provided as a number - search for regular users with that specific shop_id
+      query += ' AND u.shop_id IS NOT NULL AND u.shop_id = ? AND u.role IN (?, ?)';
+      params.push(parseInt(shop_id), 'admin', 'cashier');
     }
-    // If shop_id is not provided (null/undefined/empty), find user by username only
-    // This works because usernames are unique per shop in the database
 
     const [users] = await pool.execute(query, params);
+
+    // Defensive check: if multiple users match, it's a data integrity issue
+    if (users.length > 1) {
+      await logLoginAttempt(null, shop_id || null, username, req, 'failed', 'Multiple users found - data integrity error');
+      return res.status(500).json({
+        success: false,
+        message: 'Authentication error: Multiple users found. Please contact system administrator.'
+      });
+    }
 
     if (!users.length) {
       // Log failed login attempt (user not found)

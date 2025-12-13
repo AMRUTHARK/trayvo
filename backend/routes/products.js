@@ -45,7 +45,7 @@ router.get('/', async (req, res, next) => {
     const params = [req.shopId];
 
     if (search) {
-      query += ' AND (p.name LIKE ? OR p.sku LIKE ? OR p.barcode LIKE ?)';
+      query += ' AND (LOWER(p.name) LIKE LOWER(?) OR LOWER(p.sku) LIKE LOWER(?) OR LOWER(p.barcode) LIKE LOWER(?))';
       const searchTerm = `%${search}%`;
       params.push(searchTerm, searchTerm, searchTerm);
     }
@@ -69,7 +69,7 @@ router.get('/', async (req, res, next) => {
     const countParams = [req.shopId];
 
     if (search) {
-      countQuery += ' AND (name LIKE ? OR sku LIKE ? OR barcode LIKE ?)';
+      countQuery += ' AND (LOWER(name) LIKE LOWER(?) OR LOWER(sku) LIKE LOWER(?) OR LOWER(barcode) LIKE LOWER(?))';
       const searchTerm = `%${search}%`;
       countParams.push(searchTerm, searchTerm, searchTerm);
     }

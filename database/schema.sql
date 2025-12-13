@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS shops (
   phone VARCHAR(20),
   address TEXT,
   gstin VARCHAR(15),
-  logo_url VARCHAR(500),
+  logo_url TEXT,
   printer_type ENUM('58mm', '80mm') DEFAULT '58mm',
   printer_config JSON,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

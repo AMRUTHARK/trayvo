@@ -35,6 +35,7 @@ export default function ProductsPage() {
     min_stock_level: '0',
     description: '',
   });
+  const [shopGstRates, setShopGstRates] = useState<string[] | null>(null); // null means all rates available
 
   useEffect(() => {
     if (isSuperAdmin()) {
@@ -42,8 +43,37 @@ export default function ProductsPage() {
     } else {
       fetchProducts();
       fetchCategories();
+      fetchShopGstRates();
     }
   }, []);
+
+  useEffect(() => {
+    if (isSuperAdmin() && selectedShopId) {
+      fetchShopGstRates();
+    }
+  }, [selectedShopId]);
+
+  const fetchShopGstRates = async () => {
+    try {
+      if (isSuperAdmin()) {
+        // For superadmin, fetch from selected shop
+        if (selectedShopId) {
+          const response = await api.get(`/superadmin/shops/${selectedShopId}`);
+          const gstRates = response.data.data?.gst_rates;
+          setShopGstRates(gstRates && Array.isArray(gstRates) && gstRates.length > 0 ? gstRates : null);
+        }
+      } else {
+        // For non-superadmin, fetch from /shops endpoint
+        const response = await api.get('/shops');
+        const gstRates = response.data.data?.gst_rates;
+        setShopGstRates(gstRates && Array.isArray(gstRates) && gstRates.length > 0 ? gstRates : null);
+      }
+    } catch (error) {
+      console.error('Failed to fetch shop GST rates:', error);
+      // Default to null (all rates) if fetch fails
+      setShopGstRates(null);
+    }
+  };
 
   useEffect(() => {
     if (!isSuperAdmin() || selectedShopId) {
@@ -603,13 +633,36 @@ export default function ProductsPage() {
                       onChange={(e) => setFormData({ ...formData, gst_rate: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
                     >
-                      <option value="0">0% (Nil)</option>
-                      <option value="0.25">0.25% (Rough Diamonds)</option>
-                      <option value="3">3% (Gold, Silver, etc.)</option>
-                      <option value="5">5% (Essential Goods)</option>
-                      <option value="12">12% (Standard Rate)</option>
-                      <option value="18">18% (Standard Rate)</option>
-                      <option value="28">28% (Luxury Goods)</option>
+                      {(() => {
+                        // All available GST rates
+                        const allRates = [
+                          { value: '0', label: '0% (Nil)' },
+                          { value: '0.25', label: '0.25% (Rough Diamonds)' },
+                          { value: '3', label: '3% (Gold, Silver, etc.)' },
+                          { value: '5', label: '5% (Essential Goods)' },
+                          { value: '12', label: '12% (Standard Rate)' },
+                          { value: '18', label: '18% (Standard Rate)' },
+                          { value: '28', label: '28% (Luxury Goods)' },
+                        ];
+                        
+                        // Filter rates based on shop selection
+                        // If shopGstRates is null, show all rates (backward compatibility)
+                        // Otherwise, show only selected rates (0% is always included)
+                        const allowedRates = shopGstRates === null 
+                          ? allRates 
+                          : allRates.filter(rate => {
+                              // Always include 0%
+                              if (rate.value === '0') return true;
+                              // Include if in shop's selected rates
+                              return shopGstRates.includes(rate.value);
+                            });
+                        
+                        return allowedRates.map(rate => (
+                          <option key={rate.value} value={rate.value}>
+                            {rate.label}
+                          </option>
+                        ));
+                      })()}
                     </select>
                   </div>
                   <div>

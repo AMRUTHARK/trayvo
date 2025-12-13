@@ -51,9 +51,25 @@ router.get('/shops', async (req, res, next) => {
 
     const [shops] = await pool.execute(query, params);
 
+    // Parse gst_rates JSON for each shop
+    const shopsWithParsedGstRates = shops.map(shop => {
+      let gstRates = null;
+      if (shop.gst_rates) {
+        try {
+          gstRates = typeof shop.gst_rates === 'string' ? JSON.parse(shop.gst_rates) : shop.gst_rates;
+        } catch (e) {
+          gstRates = null;
+        }
+      }
+      return {
+        ...shop,
+        gst_rates: gstRates
+      };
+    });
+
     res.json({
       success: true,
-      data: shops
+      data: shopsWithParsedGstRates
     });
   } catch (error) {
     next(error);
@@ -87,9 +103,24 @@ router.get('/shops/:id', async (req, res, next) => {
       });
     }
 
+    const shop = shops[0];
+    
+    // Parse gst_rates JSON if present
+    let gstRates = null;
+    if (shop.gst_rates) {
+      try {
+        gstRates = typeof shop.gst_rates === 'string' ? JSON.parse(shop.gst_rates) : shop.gst_rates;
+      } catch (e) {
+        gstRates = null;
+      }
+    }
+
     res.json({
       success: true,
-      data: shops[0]
+      data: {
+        ...shop,
+        gst_rates: gstRates
+      }
     });
   } catch (error) {
     next(error);

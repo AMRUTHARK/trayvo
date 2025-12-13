@@ -28,6 +28,16 @@ function RegisterForm() {
     confirmPassword: '',
     role: 'cashier',
   });
+  const [selectedGstRates, setSelectedGstRates] = useState<string[]>(['0']); // Default: 0% selected
+  const availableGstRates = [
+    { value: '0', label: '0% (Nil)' },
+    { value: '0.25', label: '0.25% (Rough Diamonds)' },
+    { value: '3', label: '3% (Gold, Silver, etc.)' },
+    { value: '5', label: '5% (Essential Goods)' },
+    { value: '12', label: '12% (Standard Rate)' },
+    { value: '18', label: '18% (Standard Rate)' },
+    { value: '28', label: '28% (Luxury Goods)' },
+  ];
 
   // Validate token on mount
   useEffect(() => {
@@ -82,6 +92,11 @@ function RegisterForm() {
     setLoading(true);
 
     try {
+      // Ensure 0% is always included in GST rates if admin
+      const gstRatesToSubmit = formData.role === 'admin' 
+        ? Array.from(new Set([...selectedGstRates, '0']))
+        : undefined;
+
       const response = await api.post('/auth/register', {
         registration_token: formData.registration_token,
         full_name: formData.full_name,
@@ -90,6 +105,7 @@ function RegisterForm() {
         username: formData.username,
         password: formData.password,
         role: formData.role,
+        ...(gstRatesToSubmit && { gst_rates: gstRatesToSubmit }),
       });
 
       if (response.data.success) {
@@ -285,6 +301,51 @@ function RegisterForm() {
               />
             </div>
           </div>
+
+          {/* GST Rate Selection - Only for Admin */}
+          {formData.role === 'admin' && (
+            <div className="border-t pt-6">
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Select GST Rates for Your Shop *
+              </label>
+              <p className="text-xs text-gray-500 mb-3">
+                Select the GST rates your shop will use. You can change this later in settings. 0% is always included.
+              </p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {availableGstRates.map((rate) => {
+                  const isSelected = selectedGstRates.includes(rate.value);
+                  const isZeroRate = rate.value === '0';
+                  
+                  return (
+                    <label
+                      key={rate.value}
+                      className={`flex items-center p-3 border rounded-lg cursor-pointer transition-colors ${
+                        isSelected || isZeroRate
+                          ? 'bg-blue-50 border-blue-500 text-blue-700'
+                          : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                      } ${isZeroRate ? 'opacity-75' : ''}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected || isZeroRate}
+                        disabled={isZeroRate}
+                        onChange={(e) => {
+                          if (isZeroRate) return; // 0% is always included
+                          if (e.target.checked) {
+                            setSelectedGstRates([...selectedGstRates, rate.value]);
+                          } else {
+                            setSelectedGstRates(selectedGstRates.filter(r => r !== rate.value));
+                          }
+                        }}
+                        className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                      <span className="text-sm font-medium">{rate.label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <button
             type="submit"
