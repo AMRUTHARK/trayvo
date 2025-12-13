@@ -288,7 +288,9 @@ export default function SuperAdminPage() {
                 username: '',
                 password: '',
                 sendInvitation: false,
+                logo_url: '',
               });
+              setLogoPreview(null);
               setShowShopModal(true);
             }}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
