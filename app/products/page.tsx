@@ -578,13 +578,19 @@ export default function ProductsPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">GST Rate %</label>
-                    <input
-                      type="number"
-                      step="0.01"
+                    <select
                       value={formData.gst_rate}
                       onChange={(e) => setFormData({ ...formData, gst_rate: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
-                    />
+                    >
+                      <option value="0">0% (Nil)</option>
+                      <option value="0.25">0.25% (Rough Diamonds)</option>
+                      <option value="3">3% (Gold, Silver, etc.)</option>
+                      <option value="5">5% (Essential Goods)</option>
+                      <option value="12">12% (Standard Rate)</option>
+                      <option value="18">18% (Standard Rate)</option>
+                      <option value="28">28% (Luxury Goods)</option>
+                    </select>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Stock Quantity</label>
