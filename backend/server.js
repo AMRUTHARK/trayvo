@@ -9,8 +9,9 @@ dotenv.config();
 const app = express();
 
 // Trust proxy - required when running behind a reverse proxy (Render, Vercel, etc.)
+// Trust only the first proxy hop (Render) to prevent IP spoofing
 // This allows express-rate-limit to correctly identify client IPs from X-Forwarded-For header
-app.set('trust proxy', true);
+app.set('trust proxy', 1);
 
 // Middleware
 app.use(cors({
@@ -28,6 +29,9 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true, // Don't count successful logins
+  validate: {
+    trustProxy: false, // Disable validation since we trust only first proxy
+  },
 });
 
 const generalLimiter = rateLimit({
@@ -37,7 +41,10 @@ const generalLimiter = rateLimit({
   skip: (req) => {
     // Skip rate limiting for auth routes (they have their own limiter)
     return req.originalUrl.startsWith('/api/auth');
-  }
+  },
+  validate: {
+    trustProxy: false, // Disable validation since we trust only first proxy
+  },
 });
 
 // Apply general limiter (will skip auth routes)
