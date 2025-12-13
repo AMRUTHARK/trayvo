@@ -72,14 +72,52 @@ const sendRegistrationInvitation = async (email, shopName, shopId, token, regist
         <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; border: 1px solid #e0e0e0;">
           <h2 style="color: #667eea; margin-top: 0;">Registration Invitation</h2>
           <p>Hello,</p>
-          <p>You have been invited to register an account for <strong>${shopName}</strong>.</p>
+          <p>You have been invited to register an account for <strong>${shopName}</strong> to access our comprehensive billing and inventory management system.</p>
           
           <div style="background: white; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #667eea;">
             <p style="margin: 0;"><strong>Shop ID:</strong> ${shopId}</p>
             <p style="margin: 5px 0 0 0;"><strong>Shop Name:</strong> ${shopName}</p>
           </div>
 
-          <p>Click the button below to complete your registration:</p>
+          <div style="background: #f0f7ff; padding: 25px; border-radius: 8px; margin: 25px 0;">
+            <h3 style="color: #667eea; margin-top: 0; margin-bottom: 20px; font-size: 18px;">🚀 What You Can Do With Our System:</h3>
+            <div style="font-size: 14px; line-height: 1.8;">
+              <div style="margin-bottom: 10px;">
+                <span style="color: #667eea; margin-right: 8px; font-weight: bold;">✓</span>
+                <strong>Fast POS Billing:</strong> Quick checkout with real-time calculations
+              </div>
+              <div style="margin-bottom: 10px;">
+                <span style="color: #667eea; margin-right: 8px; font-weight: bold;">✓</span>
+                <strong>Inventory Management:</strong> Track stock levels and get low-stock alerts
+              </div>
+              <div style="margin-bottom: 10px;">
+                <span style="color: #667eea; margin-right: 8px; font-weight: bold;">✓</span>
+                <strong>GST-Compliant Invoices:</strong> Automatic GST calculation and reporting
+              </div>
+              <div style="margin-bottom: 10px;">
+                <span style="color: #667eea; margin-right: 8px; font-weight: bold;">✓</span>
+                <strong>Sales Reports:</strong> Detailed analytics and profit/loss tracking
+              </div>
+              <div style="margin-bottom: 10px;">
+                <span style="color: #667eea; margin-right: 8px; font-weight: bold;">✓</span>
+                <strong>Thermal Printing:</strong> Print receipts directly from the system
+              </div>
+              <div style="margin-bottom: 10px;">
+                <span style="color: #667eea; margin-right: 8px; font-weight: bold;">✓</span>
+                <strong>Hold Bills:</strong> Save and recall incomplete transactions
+              </div>
+              <div style="margin-bottom: 10px;">
+                <span style="color: #667eea; margin-right: 8px; font-weight: bold;">✓</span>
+                <strong>Export Reports:</strong> Download reports in PDF or CSV format
+              </div>
+              <div style="margin-bottom: 10px;">
+                <span style="color: #667eea; margin-right: 8px; font-weight: bold;">✓</span>
+                <strong>Cloud-Based:</strong> Access your shop data from anywhere, anytime
+              </div>
+            </div>
+          </div>
+
+          <p><strong>Get started by completing your registration:</strong></p>
           
           <div style="text-align: center; margin: 30px 0;">
             <a href="${registrationUrl}" style="background: #667eea; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
@@ -113,10 +151,21 @@ Multi-Shop Billing System - Registration Invitation
 
 Hello,
 
-You have been invited to register an account for ${shopName}.
+You have been invited to register an account for ${shopName} to access our comprehensive billing and inventory management system.
 
 Shop ID: ${shopId}
 Shop Name: ${shopName}
+
+WHAT YOU CAN DO WITH OUR SYSTEM:
+
+✓ Fast POS Billing - Quick checkout with real-time calculations
+✓ Inventory Management - Track stock levels and get low-stock alerts
+✓ GST-Compliant Invoices - Automatic GST calculation and reporting
+✓ Sales Reports - Detailed analytics and profit/loss tracking
+✓ Thermal Printing - Print receipts directly from the system
+✓ Hold Bills - Save and recall incomplete transactions
+✓ Export Reports - Download reports in PDF or CSV format
+✓ Cloud-Based - Access your shop data from anywhere, anytime
 
 Complete your registration by visiting:
 ${registrationUrl}
