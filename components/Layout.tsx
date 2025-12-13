@@ -7,6 +7,7 @@ import { getStoredUser, clearAuth, isAdmin, isSuperAdmin, isCashier } from '@/li
 import { useSessionTimeout } from '@/lib/useSessionTimeout';
 import SessionWarningModal from '@/components/SessionWarningModal';
 import CompanyLogo from '@/components/CompanyLogo';
+import ShopLogo from '@/components/ShopLogo';
 import toast from 'react-hot-toast';
 
 interface LayoutProps {
