@@ -1,5 +1,18 @@
 const nodemailer = require('nodemailer');
 
+// Detect which email service is being used
+const detectEmailService = () => {
+  const host = process.env.SMTP_HOST?.toLowerCase() || '';
+  if (host.includes('sendgrid')) {
+    return 'sendgrid';
+  } else if (host.includes('gmail')) {
+    return 'gmail';
+  } else if (host.includes('mailgun')) {
+    return 'mailgun';
+  }
+  return 'generic';
+};
+
 // Create reusable transporter object using SMTP transport
 const createTransporter = () => {
   // If SMTP is not configured, return null (email sending will be disabled)
@@ -7,7 +20,10 @@ const createTransporter = () => {
     return null;
   }
 
+  const emailService = detectEmailService();
+  
   // Remove spaces from password (Gmail app passwords often have spaces when copied)
+  // SendGrid API keys don't have spaces, but this won't hurt
   const smtpPassword = (process.env.SMTP_PASSWORD || '').replace(/\s/g, '');
   
   // Validate required fields
@@ -18,7 +34,8 @@ const createTransporter = () => {
   const smtpPort = parseInt(process.env.SMTP_PORT || '587');
   const isSecure = smtpPort === 465;
 
-  return nodemailer.createTransport({
+  // Base configuration
+  const transporterConfig = {
     host: process.env.SMTP_HOST,
     port: smtpPort,
     secure: isSecure, // true for 465 (SSL), false for 587 (TLS)
@@ -30,16 +47,30 @@ const createTransporter = () => {
     connectionTimeout: 20000, // 20 seconds to establish connection
     greetingTimeout: 20000, // 20 seconds for greeting
     socketTimeout: 20000, // 20 seconds for socket operations
-    // Additional options for better compatibility
-    tls: {
-      // Don't reject self-signed certificates (for some SMTP servers)
-      rejectUnauthorized: false,
-      // Use modern TLS versions - removed deprecated SSLv3 cipher
-      // Let Node.js use default cipher suites (TLS 1.2/1.3 compatible)
-    },
     debug: process.env.NODE_ENV === 'development', // Enable debug logging in development
     logger: process.env.NODE_ENV === 'development', // Enable logger in development
-  });
+  };
+
+  // SendGrid-specific optimizations (works better on Render)
+  if (emailService === 'sendgrid') {
+    transporterConfig.tls = {
+      rejectUnauthorized: true, // SendGrid uses valid certificates
+      // Use modern TLS versions - Node.js defaults work well with SendGrid
+    };
+    // SendGrid is reliable on Render, so we can use standard timeouts
+    transporterConfig.connectionTimeout = 15000;
+    transporterConfig.greetingTimeout = 15000;
+    transporterConfig.socketTimeout = 15000;
+  } else {
+    // Generic SMTP (Gmail, etc.) - more lenient settings
+    transporterConfig.tls = {
+      rejectUnauthorized: false, // Don't reject self-signed certificates
+      // Use modern TLS versions - removed deprecated SSLv3 cipher
+      // Let Node.js use default cipher suites (TLS 1.2/1.3 compatible)
+    };
+  }
+
+  return nodemailer.createTransport(transporterConfig);
 };
 
 // Send registration invitation email
@@ -189,13 +220,24 @@ If you did not request this invitation, please ignore this email.
     const info = await Promise.race([sendPromise, timeoutPromise]);
     return { success: true, messageId: info.messageId };
   } catch (error) {
-    // Provide more specific error messages
+    // Provide more specific error messages based on email service
     let errorMessage = error.message;
+    const emailService = detectEmailService();
     
     if (error.code === 'EAUTH' || error.responseCode === 535) {
-      errorMessage = 'SMTP authentication failed. Please check your SMTP_USER and SMTP_PASSWORD. For Gmail, ensure you are using an App Password (not your regular password).';
+      if (emailService === 'sendgrid') {
+        errorMessage = 'SendGrid authentication failed. Please check your SMTP_USER (should be "apikey") and SMTP_PASSWORD (should be your SendGrid API key).';
+      } else if (emailService === 'gmail') {
+        errorMessage = 'Gmail authentication failed. Please check your SMTP_USER and SMTP_PASSWORD. Ensure you are using an App Password (not your regular password).';
+      } else {
+        errorMessage = 'SMTP authentication failed. Please check your SMTP_USER and SMTP_PASSWORD.';
+      }
     } else if (error.code === 'ECONNECTION' || error.code === 'ETIMEDOUT') {
-      errorMessage = 'Cannot connect to SMTP server. Please check SMTP_HOST and SMTP_PORT, and ensure your network/firewall allows SMTP connections.';
+      if (emailService === 'sendgrid') {
+        errorMessage = 'Cannot connect to SendGrid SMTP server. Please check SMTP_HOST (should be smtp.sendgrid.net) and SMTP_PORT (should be 587). SendGrid works reliably on Render.';
+      } else {
+        errorMessage = 'Cannot connect to SMTP server. Please check SMTP_HOST and SMTP_PORT, and ensure your network/firewall allows SMTP connections. For Render, consider using SendGrid (smtp.sendgrid.net) which is not blocked.';
+      }
     } else if (error.code === 'EENVELOPE') {
       errorMessage = `Invalid email address: ${email}. Please check the recipient email format.`;
     } else if (error.message.includes('timeout')) {
@@ -206,6 +248,7 @@ If you did not request this invitation, please ignore this email.
     
     // Log detailed error information for debugging
     console.error('Email sending error details:', {
+      service: emailService,
       code: error.code,
       responseCode: error.responseCode,
       command: error.command,
@@ -245,18 +288,30 @@ const testEmailConnection = async () => {
     };
   } catch (error) {
     let errorMessage = error.message;
+    const emailService = detectEmailService();
     
     if (error.code === 'EAUTH' || error.responseCode === 535) {
-      errorMessage = 'SMTP authentication failed. Please check your SMTP_USER and SMTP_PASSWORD. For Gmail, ensure you are using an App Password (not your regular password).';
+      if (emailService === 'sendgrid') {
+        errorMessage = 'SendGrid authentication failed. Please check your SMTP_USER (should be "apikey") and SMTP_PASSWORD (should be your SendGrid API key).';
+      } else if (emailService === 'gmail') {
+        errorMessage = 'Gmail authentication failed. Please check your SMTP_USER and SMTP_PASSWORD. Ensure you are using an App Password (not your regular password).';
+      } else {
+        errorMessage = 'SMTP authentication failed. Please check your SMTP_USER and SMTP_PASSWORD.';
+      }
     } else if (error.code === 'ECONNECTION' || error.code === 'ETIMEDOUT') {
-      errorMessage = 'Cannot connect to SMTP server. Please check SMTP_HOST and SMTP_PORT, and ensure your network/firewall allows SMTP connections.';
+      if (emailService === 'sendgrid') {
+        errorMessage = 'Cannot connect to SendGrid SMTP server. Please check SMTP_HOST (should be smtp.sendgrid.net) and SMTP_PORT (should be 587). SendGrid works reliably on Render.';
+      } else {
+        errorMessage = 'Cannot connect to SMTP server. Please check SMTP_HOST and SMTP_PORT, and ensure your network/firewall allows SMTP connections. For Render, consider using SendGrid (smtp.sendgrid.net) which is not blocked.';
+      }
     }
     
     return {
       success: false,
       error: errorMessage,
       code: error.code,
-      responseCode: error.responseCode
+      responseCode: error.responseCode,
+      service: emailService
     };
   }
 };

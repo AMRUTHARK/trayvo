@@ -36,17 +36,19 @@ services:
         value: 900000
       - key: RATE_LIMIT_MAX_REQUESTS
         value: 100
-      # Email Configuration (Gmail)
+      # Email Configuration
+      # Option 1: SendGrid (Recommended for Render - works reliably, free tier: 100 emails/day)
+      # Option 2: Gmail (May be blocked on Render free tier)
       - key: SMTP_HOST
-        value: smtp.gmail.com
+        value: smtp.sendgrid.net  # For SendGrid. Use smtp.gmail.com for Gmail
       - key: SMTP_PORT
         value: 587
       - key: SMTP_USER
-        sync: false  # Set your Gmail address manually
+        sync: false  # For SendGrid: use "apikey". For Gmail: use your Gmail address
       - key: SMTP_PASSWORD
-        sync: false  # Set Gmail app password manually
+        sync: false  # For SendGrid: use your SendGrid API key. For Gmail: use app password
       - key: SMTP_FROM_EMAIL
-        sync: false  # Set your Gmail address manually
+        sync: false  # Your email address (verified in SendGrid or Gmail)
       - key: SMTP_FROM_NAME
-        value: Multi-Shop Billing System
+        value: Trayvo Billing
 
