@@ -80,7 +80,7 @@ router.post('/register', authLimiter, [
       });
     }
 
-    const { registration_token, full_name, email, phone, username, password, role, gst_rates } = req.body;
+    const { registration_token, full_name, email, phone, username, password, role, gst_rates, gstin } = req.body;
 
     // Validate GST rates if provided (only for admin role)
     const validGstRates = ['0', '0.25', '3', '5', '12', '18', '28'];
