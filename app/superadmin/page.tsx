@@ -190,6 +190,36 @@ export default function SuperAdminPage() {
     }
   };
 
+  const handleDisableShop = async (shopId: number) => {
+    if (!confirm('Are you sure you want to disable this shop? All admin and cashier accounts will be deactivated and unable to access the system.')) {
+      return;
+    }
+
+    setDisablingShop(shopId);
+    try {
+      await api.post(`/superadmin/shops/${shopId}/disable`);
+      toast.success('Shop disabled successfully');
+      fetchShops();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to disable shop');
+    } finally {
+      setDisablingShop(null);
+    }
+  };
+
+  const handleEnableShop = async (shopId: number) => {
+    setDisablingShop(shopId);
+    try {
+      await api.post(`/superadmin/shops/${shopId}/enable`);
+      toast.success('Shop enabled successfully');
+      fetchShops();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to enable shop');
+    } finally {
+      setDisablingShop(null);
+    }
+  };
+
   const openEditShop = (shop: any) => {
     setEditingShop(shop);
     setShopForm({
