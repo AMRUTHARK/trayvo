@@ -1,13 +1,35 @@
 const sgMail = require('@sendgrid/mail');
 
+// Track initialization state
+let isInitialized = false;
+
 // Initialize SendGrid with API key
 const initializeSendGrid = () => {
   const apiKey = process.env.SENDGRID_API_KEY;
   if (apiKey) {
     sgMail.setApiKey(apiKey);
+    isInitialized = true;
     return true;
   }
   return false;
+};
+
+// Safely check if SendGrid is initialized
+const isSendGridInitialized = () => {
+  try {
+    // If we've initialized before, return true
+    if (isInitialized) return true;
+    
+    // Check if client has authorization header (safe access with optional chaining)
+    if (sgMail?.client?.request?.defaults?.headers?.['Authorization']) {
+      isInitialized = true;
+      return true;
+    }
+    return false;
+  } catch (err) {
+    // If any error occurs, assume not initialized
+    return false;
+  }
 };
 
 // Check if email is configured (SendGrid Web API)
@@ -15,14 +37,26 @@ const isEmailConfigured = () => {
   return !!process.env.SENDGRID_API_KEY;
 };
 
+// Validate email format
+const isValidEmail = (email) => {
+  if (!email || typeof email !== 'string') return false;
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email.trim());
+};
+
 // Send registration invitation email using SendGrid Web API
 const sendRegistrationInvitation = async (email, shopName, shopId, token, registrationUrl) => {
+  // Validate email format before proceeding
+  if (!isValidEmail(email)) {
+    throw new Error(`Invalid email address: ${email}`);
+  }
+
   if (!isEmailConfigured()) {
     throw new Error('Email service is not configured. Please set SENDGRID_API_KEY environment variable.');
   }
 
-  // Initialize SendGrid if not already initialized
-  if (!sgMail.client.request.defaults.headers['Authorization']) {
+  // Initialize SendGrid safely
+  if (!isSendGridInitialized()) {
     initializeSendGrid();
   }
 
@@ -31,6 +65,10 @@ const sendRegistrationInvitation = async (email, shopName, shopId, token, regist
 
   if (!fromEmail) {
     throw new Error('SENDGRID_FROM_EMAIL or SMTP_FROM_EMAIL environment variable is required. This should be a verified sender email in SendGrid.');
+  }
+
+  if (!isValidEmail(fromEmail)) {
+    throw new Error(`Invalid from email address: ${fromEmail}`);
   }
 
   const htmlContent = `
@@ -153,9 +191,9 @@ If you did not request this invitation, please ignore this email.
   `.trim();
 
   const msg = {
-    to: email,
+    to: email.trim(),
     from: {
-      email: fromEmail,
+      email: fromEmail.trim(),
       name: fromName,
     },
     subject: `Registration Invitation - ${shopName}`,
@@ -171,10 +209,20 @@ If you did not request this invitation, please ignore this email.
       setTimeout(() => reject(new Error('Email sending timeout: Operation took longer than 30 seconds')), 30000);
     });
     
-    const result = await Promise.race([sendPromise, timeoutPromise]);
+    let result;
     
-    // SendGrid Web API returns [response, body] array
-    // Handle the response safely to avoid undefined errors
+    try {
+      result = await Promise.race([sendPromise, timeoutPromise]);
+    } catch (raceError) {
+      // Check if it's a timeout or actual SendGrid error
+      if (raceError.message && raceError.message.includes('timeout')) {
+        throw new Error('Email sending timeout: Operation took longer than 30 seconds. Please check your network connection and SendGrid service status.');
+      }
+      // Re-throw SendGrid errors as-is
+      throw raceError;
+    }
+    
+    // SendGrid Web API response handling - be defensive about structure
     let messageId = 'sent';
     
     // Log response structure in development for debugging
@@ -184,21 +232,23 @@ If you did not request this invitation, please ignore this email.
         resultType: typeof result,
         resultLength: Array.isArray(result) ? result.length : 'N/A',
         hasResponse: Array.isArray(result) ? !!result[0] : !!result,
+        resultKeys: result && typeof result === 'object' ? Object.keys(result) : 'N/A',
       });
     }
     
+    // Safely extract message ID from response
     try {
       if (Array.isArray(result) && result.length > 0) {
         // Standard SendGrid response format: [response, body]
         const response = result[0];
-        if (response && response.headers) {
+        if (response && typeof response === 'object' && response.headers && typeof response.headers === 'object') {
           messageId = response.headers['x-message-id'] || 
                      response.headers['X-Message-Id'] || 
                      'sent';
         }
       } else if (result && typeof result === 'object') {
         // Check if result itself has headers (direct response object)
-        if (result.headers) {
+        if (result.headers && typeof result.headers === 'object') {
           messageId = result.headers['x-message-id'] || 
                      result.headers['X-Message-Id'] || 
                      'sent';
@@ -223,12 +273,13 @@ If you did not request this invitation, please ignore this email.
       service: 'sendgrid',
     };
 
-    // Include SendGrid-specific error details
+    // Include SendGrid-specific error details (safely)
     if (error.response) {
       errorDetails.responseBody = process.env.NODE_ENV === 'development' 
         ? error.response.body 
         : 'Response available in logs';
-      errorDetails.responseHeaders = error.response.headers;
+      // Safe access to headers - use optional chaining and null fallback
+      errorDetails.responseHeaders = error.response.headers || null;
     }
 
     // Log detailed error information for debugging
@@ -242,9 +293,15 @@ If you did not request this invitation, please ignore this email.
     if (error.response?.statusCode || error.response?.status) {
       errorMessageParts.push(`HTTP Status: ${error.response.statusCode || error.response.status}`);
     }
-    if (error.response?.body?.errors) {
-      const sendGridErrors = error.response.body.errors.map(e => e.message).join('; ');
-      errorMessageParts.push(`SendGrid Errors: ${sendGridErrors}`);
+    // Safe array check before mapping
+    if (error.response?.body?.errors && Array.isArray(error.response.body.errors)) {
+      const sendGridErrors = error.response.body.errors
+        .map(e => (e && typeof e === 'object' && e.message) ? e.message : String(e))
+        .filter(msg => msg)
+        .join('; ');
+      if (sendGridErrors) {
+        errorMessageParts.push(`SendGrid Errors: ${sendGridErrors}`);
+      }
     }
 
     const detailedErrorMessage = errorMessageParts.join(' | ');
@@ -255,7 +312,8 @@ If you did not request this invitation, please ignore this email.
     emailError.responseCode = error.response?.statusCode || error.response?.status;
     emailError.originalMessage = error.message;
     emailError.service = 'sendgrid';
-    if (error.response?.body?.errors) {
+    // Safe array check before assigning
+    if (error.response?.body?.errors && Array.isArray(error.response.body.errors)) {
       emailError.sendGridErrors = error.response.body.errors;
     }
 
@@ -288,6 +346,13 @@ const testEmailConnection = async () => {
       };
     }
 
+    if (!isValidEmail(fromEmail)) {
+      return {
+        success: false,
+        error: `Invalid from email address format: ${fromEmail}`
+      };
+    }
+
     return {
       success: true,
       message: 'SendGrid configuration appears valid. API key and from email are set. Note: Actual sending will be tested when sending an invitation.'
@@ -299,9 +364,14 @@ const testEmailConnection = async () => {
       errorMessage = 'SendGrid API key is invalid or unauthorized. Please check your SENDGRID_API_KEY environment variable.';
     } else if (error.response?.statusCode === 403 || error.response?.status === 403) {
       errorMessage = 'SendGrid API key does not have permission to send emails. Please check your API key permissions.';
-    } else if (error.response?.body?.errors) {
-      const sendGridErrors = error.response.body.errors.map(e => e.message).join('; ');
-      errorMessage = `SendGrid error: ${sendGridErrors}`;
+    } else if (error.response?.body?.errors && Array.isArray(error.response.body.errors)) {
+      const sendGridErrors = error.response.body.errors
+        .map(e => (e && typeof e === 'object' && e.message) ? e.message : String(e))
+        .filter(msg => msg)
+        .join('; ');
+      if (sendGridErrors) {
+        errorMessage = `SendGrid error: ${sendGridErrors}`;
+      }
     }
     
     return {
