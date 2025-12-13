@@ -82,7 +82,7 @@ const sendRegistrationInvitation = async (email, shopName, shopId, token, regist
   }
 
   const fromEmail = process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER;
-  const fromName = process.env.SMTP_FROM_NAME || 'Multi-Shop Billing System';
+  const fromName = process.env.SMTP_FROM_NAME || 'Trayvo Billing System';
 
   const mailOptions = {
     from: `"${fromName}" <${fromEmail}>`,
@@ -98,7 +98,7 @@ const sendRegistrationInvitation = async (email, shopName, shopId, token, regist
       </head>
       <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-          <h1 style="color: white; margin: 0;">Multi-Shop Billing System</h1>
+          <h1 style="color: white; margin: 0;">Trayvo Billing System</h1>
         </div>
         <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; border: 1px solid #e0e0e0;">
           <h2 style="color: #667eea; margin-top: 0;">Registration Invitation</h2>
@@ -178,7 +178,7 @@ const sendRegistrationInvitation = async (email, shopName, shopId, token, regist
       </html>
     `,
     text: `
-Multi-Shop Billing System - Registration Invitation
+Trayvo Billing System - Registration Invitation
 
 Hello,
 
