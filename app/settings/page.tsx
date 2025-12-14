@@ -19,6 +19,7 @@ export default function SettingsPage() {
   const [deletingUserId, setDeletingUserId] = useState<number | null>(null);
   const [showCreateCashier, setShowCreateCashier] = useState(false);
   const [creatingCashier, setCreatingCashier] = useState(false);
+  const [showGstRatesModal, setShowGstRatesModal] = useState(false);
   const [cashierForm, setCashierForm] = useState({
     username: '',
     email: '',
@@ -200,16 +201,35 @@ export default function SettingsPage() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      // Ensure 0% is always included in GST rates
-      const gstRatesToSubmit = Array.from(new Set([...selectedGstRates, '0']));
-      await api.put('/shops', {
-        ...formData,
-        gst_rates: gstRatesToSubmit,
-      });
+      await api.put('/shops', formData);
       toast.success('Settings updated successfully');
       fetchData();
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Update failed');
+    }
+  };
+
+  const handleGstRateChange = (rateValue: string, isChecked: boolean) => {
+    if (rateValue === '0') return; // 0% is always selected and cannot be changed
+    setSelectedGstRates(prev => {
+      if (isChecked) {
+        return Array.from(new Set([...prev, rateValue])).sort((a, b) => parseFloat(a) - parseFloat(b));
+      } else {
+        return prev.filter(r => r !== rateValue);
+      }
+    });
+  };
+
+  const handleSaveGstRates = async () => {
+    try {
+      // Ensure 0% is always included in GST rates
+      const gstRatesToSubmit = Array.from(new Set([...selectedGstRates, '0']));
+      await api.put('/shops', { gst_rates: gstRatesToSubmit });
+      toast.success('GST rates updated successfully');
+      setShowGstRatesModal(false);
+      fetchData(); // Refresh data to show updated state
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to update GST rates');
     }
   };
 
@@ -459,61 +479,26 @@ export default function SettingsPage() {
           </form>
         </div>
 
-        {/* GST Rates Management */}
+        {/* GST Rates Configuration Button */}
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">GST Rates Configuration</h2>
-          <p className="text-sm text-gray-600 mb-4">
-            Select the GST rates your shop will use. These rates will be available when creating products.
-            <strong className="text-gray-900"> 0% GST is always included and cannot be removed.</strong>
-          </p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-            {availableGstRates.map((rate) => {
-              const isSelected = selectedGstRates.includes(rate.value);
-              const isZeroRate = rate.value === '0';
-              
-              return (
-                <label
-                  key={rate.value}
-                  className={`flex items-center p-3 border rounded-lg cursor-pointer transition-colors ${
-                    isSelected || isZeroRate
-                      ? 'bg-blue-50 border-blue-500 text-blue-700'
-                      : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-                  } ${isZeroRate ? 'opacity-75' : ''}`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={isSelected || isZeroRate}
-                    disabled={isZeroRate}
-                    onChange={(e) => {
-                      if (isZeroRate) return; // 0% is always included
-                      if (e.target.checked) {
-                        setSelectedGstRates([...selectedGstRates, rate.value]);
-                      } else {
-                        setSelectedGstRates(selectedGstRates.filter(r => r !== rate.value));
-                      }
-                    }}
-                    className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <span className="text-sm font-medium">{rate.label}</span>
-                </label>
-              );
-            })}
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-xl font-bold text-gray-800 mb-2">GST Rates Configuration</h2>
+              <p className="text-sm text-gray-600">
+                Configure the GST rates available for your products. Currently selected: {' '}
+                {Array.from(new Set([...selectedGstRates, '0']))
+                  .sort((a, b) => parseFloat(a) - parseFloat(b))
+                  .map(r => `${r}%`)
+                  .join(', ')}
+              </p>
+            </div>
+            <button
+              onClick={() => setShowGstRatesModal(true)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              Configure GST Rates
+            </button>
           </div>
-          <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-            <p className="text-sm text-gray-700">
-              <strong>Selected Rates:</strong>{' '}
-              {Array.from(new Set([...selectedGstRates, '0']))
-                .sort((a, b) => parseFloat(a) - parseFloat(b))
-                .map(r => `${r}%`)
-                .join(', ')}
-            </p>
-          </div>
-          <button
-            onClick={handleSave}
-            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            Save GST Rates
-          </button>
         </div>
 
         {/* Users Management */}
@@ -710,6 +695,80 @@ export default function SettingsPage() {
             </table>
           </div>
         </div>
+
+        {/* GST Rates Configuration Modal */}
+        {showGstRatesModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-2xl font-bold text-gray-800">GST Rates Configuration</h2>
+                <button
+                  onClick={() => setShowGstRatesModal(false)}
+                  className="text-gray-500 hover:text-gray-700 text-2xl"
+                >
+                  ×
+                </button>
+              </div>
+              
+              <p className="text-sm text-gray-600 mb-4">
+                Select the GST rates your shop will use. These rates will be available when creating products.{' '}
+                <strong className="text-gray-900">0% GST is always included and cannot be removed.</strong>
+              </p>
+              
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                {availableGstRates.map((rate) => {
+                  const isSelected = selectedGstRates.includes(rate.value);
+                  const isZeroRate = rate.value === '0';
+                  
+                  return (
+                    <label
+                      key={rate.value}
+                      className={`flex items-center p-3 border rounded-lg cursor-pointer transition-colors ${
+                        isSelected || isZeroRate
+                          ? 'bg-blue-50 border-blue-500 text-blue-700'
+                          : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                      } ${isZeroRate ? 'opacity-75' : ''}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected || isZeroRate}
+                        disabled={isZeroRate}
+                        onChange={(e) => handleGstRateChange(rate.value, e.target.checked)}
+                        className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                      <span className="text-sm font-medium">{rate.label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+              
+              <div className="mb-6 p-3 bg-gray-50 rounded-lg">
+                <p className="text-sm text-gray-700">
+                  <strong>Selected Rates:</strong>{' '}
+                  {Array.from(new Set([...selectedGstRates, '0']))
+                    .sort((a, b) => parseFloat(a) - parseFloat(b))
+                    .map(r => `${r}%`)
+                    .join(', ')}
+                </p>
+              </div>
+              
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setShowGstRatesModal(false)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveGstRates}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  Save GST Rates
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </Layout>
   );
