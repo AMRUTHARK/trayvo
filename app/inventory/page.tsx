@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { getStoredUser, isSuperAdmin, isCashier } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
 import ExcelJS from 'exceljs';
+import { formatCurrency, formatQuantity, formatNumber } from '@/lib/format';
 
 export default function InventoryPage() {
   const router = useRouter();
@@ -330,19 +331,19 @@ export default function InventoryPage() {
                 <div className="bg-white rounded-lg shadow p-4 border-l-4 border-blue-500">
                   <div className="text-sm text-gray-600 mb-1">Total Inventory Value (Cost)</div>
                   <div className="text-2xl font-bold text-gray-800">
-                    ₹{analytics.total_cost_value?.toLocaleString('en-IN', { maximumFractionDigits: 2 }) || '0'}
+                    {formatCurrency(analytics.total_cost_value)}
                   </div>
                 </div>
                 <div className="bg-white rounded-lg shadow p-4 border-l-4 border-green-500">
                   <div className="text-sm text-gray-600 mb-1">Total Inventory Value (Selling)</div>
                   <div className="text-2xl font-bold text-gray-800">
-                    ₹{analytics.total_selling_value?.toLocaleString('en-IN', { maximumFractionDigits: 2 }) || '0'}
+                    {formatCurrency(analytics.total_selling_value)}
                   </div>
                 </div>
                 <div className="bg-white rounded-lg shadow p-4 border-l-4 border-purple-500">
                   <div className="text-sm text-gray-600 mb-1">Potential Profit</div>
                   <div className="text-2xl font-bold text-gray-800">
-                    ₹{analytics.potential_profit?.toLocaleString('en-IN', { maximumFractionDigits: 2 }) || '0'}
+                    {formatCurrency(analytics.potential_profit)}
                   </div>
                   <div className="text-xs text-gray-500 mt-1">
                     Margin: {analytics.profit_margin || '0'}%
@@ -366,25 +367,25 @@ export default function InventoryPage() {
               <div className="bg-white rounded-lg shadow p-4">
                 <div className="text-sm text-gray-600 mb-1">Total Stock Quantity</div>
                 <div className="text-xl font-bold text-gray-800">
-                  {analytics.total_stock_quantity?.toLocaleString('en-IN', { maximumFractionDigits: 2 }) || '0'}
+                  {formatQuantity(analytics.total_stock_quantity)}
                 </div>
               </div>
               <div className="bg-white rounded-lg shadow p-4">
                 <div className="text-sm text-gray-600 mb-1">In Stock</div>
                 <div className="text-xl font-bold text-green-600">
-                  {analytics.in_stock_count?.toLocaleString('en-IN') || '0'}
+                  {formatNumber(analytics.in_stock_count, 0)}
                 </div>
               </div>
               <div className="bg-white rounded-lg shadow p-4">
                 <div className="text-sm text-gray-600 mb-1">Low Stock</div>
                 <div className="text-xl font-bold text-yellow-600">
-                  {analytics.low_stock_count?.toLocaleString('en-IN') || '0'}
+                  {formatNumber(analytics.low_stock_count, 0)}
                 </div>
               </div>
               <div className="bg-white rounded-lg shadow p-4">
                 <div className="text-sm text-gray-600 mb-1">Out of Stock</div>
                 <div className="text-xl font-bold text-red-600">
-                  {analytics.out_of_stock_count?.toLocaleString('en-IN') || '0'}
+                  {formatNumber(analytics.out_of_stock_count, 0)}
                 </div>
               </div>
             </div>
@@ -416,16 +417,16 @@ export default function InventoryPage() {
                             {product.category_name || 'Uncategorized'}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                            {parseFloat(product.stock_quantity || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                            {formatQuantity(product.stock_quantity)}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                            ₹{parseFloat(product.cost_price || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                            {formatCurrency(product.cost_price)}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                            ₹{parseFloat(product.selling_price || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                            {formatCurrency(product.selling_price)}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm font-semibold text-blue-600">
-                            ₹{parseFloat(product.stock_value || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                            {formatCurrency(product.stock_value)}
                           </td>
                         </tr>
                       ))}

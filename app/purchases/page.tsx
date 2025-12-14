@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { getStoredUser, isSuperAdmin, isCashier } from '@/lib/auth';
+import { formatCurrency, formatQuantity, formatPercentage } from '@/lib/format';
 
 export default function PurchasesPage() {
   const router = useRouter();
@@ -290,7 +291,7 @@ export default function PurchasesPage() {
                     <td className="px-4 py-3 text-sm">{purchase.purchase_number}</td>
                     <td className="px-4 py-3 text-sm">{purchase.supplier_name || '-'}</td>
                     <td className="px-4 py-3 text-sm">{format(new Date(purchase.created_at), 'dd MMM yyyy')}</td>
-                    <td className="px-4 py-3 text-sm font-medium">₹{parseFloat(purchase.total_amount || 0).toFixed(2)}</td>
+                    <td className="px-4 py-3 text-sm font-medium">{formatCurrency(purchase.total_amount)}</td>
                     <td className="px-4 py-3 text-sm">
                       <span className={`px-2 py-1 rounded text-xs ${
                         purchase.status === 'completed' ? 'bg-green-100 text-green-800' :
@@ -386,7 +387,7 @@ export default function PurchasesPage() {
                         onClick={() => addToCart(product)}
                         className="p-2 hover:bg-gray-100 cursor-pointer"
                       >
-                        {product.name} ({product.sku}) - ₹{product.cost_price}
+                        {product.name} ({product.sku}) - {formatCurrency(product.cost_price)}
                       </div>
                     ))}
                   </div>
@@ -443,7 +444,7 @@ export default function PurchasesPage() {
                               />
                             </td>
                             <td className="px-2 py-1">
-                              ₹{((item.unit_price || 0) * (item.quantity || 0) - (item.discount_amount || 0)).toFixed(2)}
+                              {formatCurrency((item.unit_price || 0) * (item.quantity || 0) - (item.discount_amount || 0))}
                             </td>
                             <td className="px-2 py-1">
                               <button
@@ -488,19 +489,19 @@ export default function PurchasesPage() {
               <div className="mb-4 border-t pt-4">
                 <div className="flex justify-between mb-1">
                   <span>Subtotal:</span>
-                  <span>₹{totals.subtotal.toFixed(2)}</span>
+                  <span>{formatCurrency(totals.subtotal)}</span>
                 </div>
                 <div className="flex justify-between mb-1">
                   <span>Discount:</span>
-                  <span>-₹{totals.discount.toFixed(2)}</span>
+                  <span>-{formatCurrency(totals.discount)}</span>
                 </div>
                 <div className="flex justify-between mb-1">
                   <span>GST:</span>
-                  <span>₹{totals.gst.toFixed(2)}</span>
+                  <span>{formatCurrency(totals.gst)}</span>
                 </div>
                 <div className="flex justify-between font-bold text-lg border-t pt-1">
                   <span>Total:</span>
-                  <span>₹{totals.total.toFixed(2)}</span>
+                  <span>{formatCurrency(totals.total)}</span>
                 </div>
               </div>
 

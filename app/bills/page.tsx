@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { getStoredUser, isSuperAdmin } from '@/lib/auth';
+import { formatCurrency } from '@/lib/format';
 
 export default function BillsPage() {
   const router = useRouter();
@@ -163,7 +164,7 @@ export default function BillsPage() {
                           {bill.customer_name || 'Walk-in'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-                          ₹{parseFloat(bill.total_amount || 0).toFixed(2)}
+                          {formatCurrency(bill.total_amount)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
                           <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs">

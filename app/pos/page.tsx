@@ -6,6 +6,7 @@ import api from '@/lib/api';
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
 import { isSuperAdmin } from '@/lib/auth';
+import { formatCurrency, formatQuantity } from '@/lib/format';
 
 interface CartItem {
   product_id: number;
@@ -376,8 +377,8 @@ export default function POSPage() {
                   >
                     <div>
                       <div className="font-medium text-gray-800">{product.name}</div>
-                      <div className="text-sm text-gray-600">SKU: {product.sku} | Stock: {safeParseFloat(product.stock_quantity, 0).toFixed(3)}</div>
-                      <div className="text-sm font-semibold text-blue-600">₹{safeParseFloat(product.selling_price, 0).toFixed(2)}</div>
+                      <div className="text-sm text-gray-600">SKU: {product.sku} | Stock: {formatQuantity(safeParseFloat(product.stock_quantity, 0))}</div>
+                      <div className="text-sm font-semibold text-blue-600">{formatCurrency(safeParseFloat(product.selling_price, 0))}</div>
                     </div>
                     <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
                       Add
@@ -427,13 +428,13 @@ export default function POSPage() {
                       <div>
                         <label className="text-xs text-gray-600 block mb-1">Price</label>
                         <div className="px-2 py-1 text-sm font-medium text-gray-900 bg-gray-50 rounded border border-gray-200">
-                          ₹{safeParseFloat(item.unit_price, 0).toFixed(2)}
+                          {formatCurrency(safeParseFloat(item.unit_price, 0))}
                         </div>
                       </div>
                       <div>
                         <label className="text-xs text-gray-600 block mb-1">Total</label>
                         <div className="px-2 py-1 text-sm font-semibold text-blue-600 bg-blue-50 rounded border border-blue-200">
-                          ₹{safeParseFloat(item.total_amount, 0).toFixed(2)}
+                          {formatCurrency(safeParseFloat(item.total_amount, 0))}
                         </div>
                       </div>
                     </div>
@@ -493,31 +494,31 @@ export default function POSPage() {
             <div className="border-t border-gray-200 pt-4 space-y-2 mb-4">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Subtotal</span>
-                <span className="font-medium">₹{subtotal.toFixed(2)}</span>
+                <span className="font-medium">{formatCurrency(subtotal)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Item Discount</span>
-                <span className="font-medium">₹{totalDiscount.toFixed(2)}</span>
+                <span className="font-medium">{formatCurrency(totalDiscount)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Bill Discount</span>
-                <span className="font-medium">₹{billDiscount.toFixed(2)}</span>
+                <span className="font-medium">{formatCurrency(billDiscount)}</span>
               </div>
               {includeGst && (
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">GST</span>
-                  <span className="font-medium">₹{totalGst.toFixed(2)}</span>
+                  <span className="font-medium">{formatCurrency(totalGst)}</span>
                 </div>
               )}
               {Math.abs(roundOff) > 0.01 && (
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Round Off</span>
-                  <span className="font-medium">{roundOff > 0 ? '+' : ''}₹{roundOff.toFixed(2)}</span>
+                  <span className="font-medium">{roundOff > 0 ? '+' : ''}{formatCurrency(roundOff)}</span>
                 </div>
               )}
               <div className="flex justify-between text-lg font-bold border-t border-gray-200 pt-2">
                 <span>Total</span>
-                <span>₹{total.toFixed(2)}</span>
+                <span>{formatCurrency(total)}</span>
               </div>
             </div>
 
@@ -644,7 +645,7 @@ export default function POSPage() {
                             {billData.customerName || 'Walk-in Customer'}
                           </div>
                           <div className="text-sm text-gray-600">
-                            {itemCount} item{itemCount !== 1 ? 's' : ''} • ₹{safeParseFloat(total, 0).toFixed(2)}
+                            {itemCount} item{itemCount !== 1 ? 's' : ''} • {formatCurrency(safeParseFloat(total, 0))}
                           </div>
                           <div className="text-xs text-gray-500">
                             {new Date(holdBill.created_at).toLocaleString()}

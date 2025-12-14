@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Layout from '@/components/Layout';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
+import { formatCurrency, formatQuantity, formatPercentage } from '@/lib/format';
 import { format } from 'date-fns';
 
 export default function PurchaseDetailPage() {
@@ -105,10 +106,10 @@ export default function PurchaseDetailPage() {
                         <div className="font-medium">{item.product_name}</div>
                         <div className="text-sm text-gray-500">{item.sku}</div>
                       </td>
-                      <td className="px-4 py-3 text-sm">{item.quantity} {item.unit}</td>
-                      <td className="px-4 py-3 text-sm">₹{parseFloat(item.unit_price || 0).toFixed(2)}</td>
-                      <td className="px-4 py-3 text-sm">{parseFloat(item.gst_rate || 0) > 0 ? `${item.gst_rate}%` : '0%'}</td>
-                      <td className="px-4 py-3 text-sm font-medium">₹{parseFloat(item.total_amount || 0).toFixed(2)}</td>
+                      <td className="px-4 py-3 text-sm">{formatQuantity(item.quantity)} {item.unit}</td>
+                      <td className="px-4 py-3 text-sm">{formatCurrency(item.unit_price)}</td>
+                      <td className="px-4 py-3 text-sm">{formatPercentage(item.gst_rate)}</td>
+                      <td className="px-4 py-3 text-sm font-medium">{formatCurrency(item.total_amount)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -120,21 +121,21 @@ export default function PurchaseDetailPage() {
             <div className="space-y-2 text-right">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Subtotal</span>
-                <span className="font-medium">₹{parseFloat(purchase.subtotal || 0).toFixed(2)}</span>
+                <span className="font-medium">{formatCurrency(purchase.subtotal)}</span>
               </div>
               {parseFloat(purchase.discount_amount || 0) > 0 && (
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Discount</span>
-                  <span className="font-medium">-₹{parseFloat(purchase.discount_amount || 0).toFixed(2)}</span>
+                  <span className="font-medium">-{formatCurrency(purchase.discount_amount)}</span>
                 </div>
               )}
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">GST</span>
-                <span className="font-medium">₹{parseFloat(purchase.gst_amount || 0).toFixed(2)}</span>
+                <span className="font-medium">{formatCurrency(purchase.gst_amount)}</span>
               </div>
               <div className="flex justify-between text-xl font-bold border-t border-gray-200 pt-2">
                 <span>Total</span>
-                <span>₹{parseFloat(purchase.total_amount || 0).toFixed(2)}</span>
+                <span>{formatCurrency(purchase.total_amount)}</span>
               </div>
             </div>
           </div>

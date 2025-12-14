@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
 import ExcelJS from 'exceljs';
 import { getStoredUser, isSuperAdmin } from '@/lib/auth';
+import { formatCurrency, formatQuantity } from '@/lib/format';
 
 export default function ProductsPage() {
   const router = useRouter();
@@ -679,10 +680,10 @@ export default function ProductsPage() {
                           {product.category_name || 'Uncategorized'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          {product.stock_quantity} {product.unit}
+                          {formatQuantity(product.stock_quantity)} {product.unit}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          ₹{product.selling_price}
+                          {formatCurrency(product.selling_price)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
                           <button

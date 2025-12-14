@@ -17,6 +17,7 @@ import {
 } from 'chart.js';
 import { getStoredUser, isSuperAdmin, isCashier } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
+import { formatCurrency, formatNumber } from '@/lib/format';
 
 ChartJS.register(
   CategoryScale,
@@ -197,14 +198,14 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatCard
             title="Revenue"
-            value={`₹${stats?.revenue?.toLocaleString('en-IN') || '0'}`}
+            value={formatCurrency(stats?.revenue)}
             icon="💰"
             color="blue"
             info="Total sales amount (subtotal) before discounts and GST for the selected period."
           />
           <StatCard
             title="Profit"
-            value={`₹${stats?.profit?.toLocaleString('en-IN') || '0'}`}
+            value={formatCurrency(stats?.profit)}
             icon="📈"
             color="green"
             info="Revenue minus cost of goods sold. This is your actual profit after accounting for product costs."
@@ -218,7 +219,7 @@ export default function DashboardPage() {
           />
           <StatCard
             title="Items Sold"
-            value={stats?.items_sold?.toLocaleString('en-IN') || '0'}
+            value={formatNumber(stats?.items_sold, 0)}
             icon="🛒"
             color="orange"
             info="Total quantity of products sold across all completed bills for the selected period."
@@ -240,7 +241,7 @@ export default function DashboardPage() {
           />
           <InfoCard
             title="Total GST"
-            value={`₹${stats?.total_gst?.toLocaleString('en-IN') || '0'}`}
+            value={formatCurrency(stats?.total_gst)}
             info="Total GST (Goods and Services Tax) collected on all sales for the selected period."
           />
         </div>

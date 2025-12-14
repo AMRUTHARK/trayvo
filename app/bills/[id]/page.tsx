@@ -7,6 +7,7 @@ import api from '@/lib/api';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import ThermalPrint from '@/components/ThermalPrint';
+import { formatCurrency, formatQuantity, formatPercentage } from '@/lib/format';
 
 export default function BillDetailPage() {
   const params = useParams();
@@ -158,12 +159,12 @@ export default function BillDetailPage() {
                         <div className="font-medium">{item.product_name}</div>
                         <div className="text-sm text-gray-500">{item.sku}</div>
                       </td>
-                      <td className="px-4 py-3 text-sm">{item.quantity} {item.unit}</td>
-                      <td className="px-4 py-3 text-sm">₹{parseFloat(item.unit_price || 0).toFixed(2)}</td>
+                      <td className="px-4 py-3 text-sm">{formatQuantity(item.quantity)} {item.unit}</td>
+                      <td className="px-4 py-3 text-sm">{formatCurrency(item.unit_price)}</td>
                       <td className="px-4 py-3 text-sm">
-                        {parseFloat(item.gst_rate || 0) > 0 ? `${parseFloat(item.gst_rate || 0)}%` : '0%'}
+                        {formatPercentage(item.gst_rate)}
                       </td>
-                      <td className="px-4 py-3 text-sm font-medium">₹{parseFloat(item.total_amount || 0).toFixed(2)}</td>
+                      <td className="px-4 py-3 text-sm font-medium">{formatCurrency(item.total_amount)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -180,7 +181,7 @@ export default function BillDetailPage() {
                   <span>Number of Items: <strong className="text-gray-900">{numItems}</strong></span>
                 </div>
                 <div>
-                  <span>Total Quantity: <strong className="text-gray-900">{totalQty.toFixed(3)}</strong></span>
+                  <span>Total Quantity: <strong className="text-gray-900">{formatQuantity(totalQty)}</strong></span>
                 </div>
               </div>
 
@@ -188,12 +189,12 @@ export default function BillDetailPage() {
               <div className="space-y-2 text-right">
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Sub Total</span>
-                  <span className="font-medium">₹{subtotal.toFixed(2)}</span>
+                  <span className="font-medium">{formatCurrency(subtotal)}</span>
                 </div>
                 {discount > 0 && (
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">(-) Discount</span>
-                    <span className="font-medium">-₹{discount.toFixed(2)}</span>
+                    <span className="font-medium">-{formatCurrency(discount)}</span>
                   </div>
                 )}
                 
@@ -205,12 +206,12 @@ export default function BillDetailPage() {
                     return (
                       <div key={`gst-${rate}`} className="space-y-1">
                         <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">CGST {rateNum.toFixed(2)}% (Taxable ₹{taxable.toFixed(2)})</span>
-                          <span className="font-medium">₹{cgst.toFixed(2)}</span>
+                          <span className="text-gray-600">CGST {formatPercentage(rateNum)} (Taxable {formatCurrency(taxable)})</span>
+                          <span className="font-medium">{formatCurrency(cgst)}</span>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">SGST {rateNum.toFixed(2)}% (Taxable ₹{taxable.toFixed(2)})</span>
-                          <span className="font-medium">₹{sgst.toFixed(2)}</span>
+                          <span className="text-gray-600">SGST {formatPercentage(rateNum)} (Taxable {formatCurrency(taxable)})</span>
+                          <span className="font-medium">{formatCurrency(sgst)}</span>
                         </div>
                       </div>
                     );
@@ -218,12 +219,12 @@ export default function BillDetailPage() {
                     return (
                       <div key={`gst-0`} className="space-y-1">
                         <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">CGST 0% (Taxable ₹{taxable.toFixed(2)})</span>
-                          <span className="font-medium">₹0.00</span>
+                          <span className="text-gray-600">CGST 0% (Taxable {formatCurrency(taxable)})</span>
+                          <span className="font-medium">{formatCurrency(0)}</span>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">SGST 0% (Taxable ₹{taxable.toFixed(2)})</span>
-                          <span className="font-medium">₹0.00</span>
+                          <span className="text-gray-600">SGST 0% (Taxable {formatCurrency(taxable)})</span>
+                          <span className="font-medium">{formatCurrency(0)}</span>
                         </div>
                       </div>
                     );
@@ -235,13 +236,13 @@ export default function BillDetailPage() {
                 {Math.abs(roundOff) > 0.01 && (
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Round Off</span>
-                    <span className="font-medium">₹{roundOff > 0 ? '+' : ''}{roundOff.toFixed(2)}</span>
+                    <span className="font-medium">{roundOff > 0 ? '+' : ''}{formatCurrency(roundOff)}</span>
                   </div>
                 )}
 
                 <div className="flex justify-between text-xl font-bold border-t border-gray-200 pt-2 mt-2">
                   <span>TOTAL</span>
-                  <span>₹{total.toFixed(2)}</span>
+                  <span>{formatCurrency(total)}</span>
                 </div>
               </div>
             </div>
