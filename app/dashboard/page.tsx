@@ -200,43 +200,49 @@ export default function DashboardPage() {
             value={`₹${stats?.revenue?.toLocaleString('en-IN') || '0'}`}
             icon="💰"
             color="blue"
+            info="Total sales amount (subtotal) before discounts and GST for the selected period."
           />
           <StatCard
             title="Profit"
             value={`₹${stats?.profit?.toLocaleString('en-IN') || '0'}`}
             icon="📈"
             color="green"
+            info="Revenue minus cost of goods sold. This is your actual profit after accounting for product costs."
           />
           <StatCard
             title="Margin"
             value={`${stats?.margin || '0'}%`}
             icon="📊"
             color="purple"
+            info="Profit margin percentage calculated as (Profit / Revenue) × 100. Higher margin indicates better profitability."
           />
           <StatCard
             title="Items Sold"
             value={stats?.items_sold?.toLocaleString('en-IN') || '0'}
             icon="🛒"
             color="orange"
+            info="Total quantity of products sold across all completed bills for the selected period."
           />
         </div>
 
         {/* Additional Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-sm text-gray-600 mb-2">Total Bills</div>
-            <div className="text-2xl font-bold text-gray-800">{stats?.total_bills || 0}</div>
-          </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-sm text-gray-600 mb-2">Low Stock Items</div>
-            <div className="text-2xl font-bold text-red-600">{stats?.low_stock_count || 0}</div>
-          </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-sm text-gray-600 mb-2">Total GST</div>
-            <div className="text-2xl font-bold text-gray-800">
-              ₹{stats?.total_gst?.toLocaleString('en-IN') || '0'}
-            </div>
-          </div>
+          <InfoCard
+            title="Total Bills"
+            value={stats?.total_bills || 0}
+            info="Total number of completed transactions (bills) for the selected period."
+          />
+          <InfoCard
+            title="Low Stock Items"
+            value={stats?.low_stock_count || 0}
+            valueColor="text-red-600"
+            info="Number of products where current stock is at or below the minimum stock level. Consider restocking these items."
+          />
+          <InfoCard
+            title="Total GST"
+            value={`₹${stats?.total_gst?.toLocaleString('en-IN') || '0'}`}
+            info="Total GST (Goods and Services Tax) collected on all sales for the selected period."
+          />
         </div>
 
         {/* Charts */}
@@ -292,7 +298,14 @@ export default function DashboardPage() {
   );
 }
 
-function StatCard({ title, value, icon, color }: { title: string; value: string; icon: string; color: string }) {
+function StatCard({ title, value, icon, color, info }: { 
+  title: string; 
+  value: string; 
+  icon: string; 
+  color: string;
+  info?: string;
+}) {
+  const [showTooltip, setShowTooltip] = useState(false);
   const colorClasses: any = {
     blue: 'bg-blue-50 text-blue-600',
     green: 'bg-green-50 text-green-600',
@@ -301,14 +314,83 @@ function StatCard({ title, value, icon, color }: { title: string; value: string;
   };
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
+    <div className="bg-white rounded-lg shadow p-6 relative">
       <div className="flex items-center justify-between">
-        <div>
-          <div className="text-sm text-gray-600 mb-2">{title}</div>
+        <div className="flex-1">
+          <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
+            <span>{title}</span>
+            {info && (
+              <div className="relative">
+                <button
+                  type="button"
+                  onMouseEnter={() => setShowTooltip(true)}
+                  onMouseLeave={() => setShowTooltip(false)}
+                  className="text-gray-400 hover:text-gray-600 focus:outline-none"
+                >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                  </svg>
+                </button>
+                {showTooltip && (
+                  <div className="absolute z-10 w-64 p-3 text-xs text-white bg-gray-900 rounded-lg shadow-lg bottom-full left-1/2 transform -translate-x-1/2 mb-2">
+                    {info}
+                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
+                      <div className="border-4 border-transparent border-t-gray-900"></div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
           <div className="text-2xl font-bold text-gray-800">{value}</div>
         </div>
         <div className={`text-4xl ${colorClasses[color]}`}>{icon}</div>
       </div>
+    </div>
+  );
+}
+
+function InfoCard({ 
+  title, 
+  value, 
+  valueColor = "text-gray-800",
+  info 
+}: { 
+  title: string; 
+  value: string | number; 
+  valueColor?: string;
+  info?: string;
+}) {
+  const [showTooltip, setShowTooltip] = useState(false);
+
+  return (
+    <div className="bg-white rounded-lg shadow p-6 relative">
+      <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
+        <span>{title}</span>
+        {info && (
+          <div className="relative">
+            <button
+              type="button"
+              onMouseEnter={() => setShowTooltip(true)}
+              onMouseLeave={() => setShowTooltip(false)}
+              className="text-gray-400 hover:text-gray-600 focus:outline-none"
+            >
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+              </svg>
+            </button>
+            {showTooltip && (
+              <div className="absolute z-10 w-64 p-3 text-xs text-white bg-gray-900 rounded-lg shadow-lg bottom-full left-1/2 transform -translate-x-1/2 mb-2">
+                {info}
+                <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
+                  <div className="border-4 border-transparent border-t-gray-900"></div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+      <div className={`text-2xl font-bold ${valueColor}`}>{value}</div>
     </div>
   );
 }
