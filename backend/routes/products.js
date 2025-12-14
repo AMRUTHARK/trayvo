@@ -44,6 +44,11 @@ router.get('/', async (req, res, next) => {
     `;
     const params = [req.shopId];
 
+    // For POS searches (skip_count=true), exclude products with zero quantity
+    if (skip_count === 'true') {
+      query += ' AND p.stock_quantity > 0';
+    }
+
     if (search) {
       const searchTerm = search.trim();
       // Optimized search: prioritize exact matches and prefix matches (can use indexes)

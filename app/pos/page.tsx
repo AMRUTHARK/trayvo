@@ -181,17 +181,23 @@ export default function POSPage() {
     }
   };
 
+  // Helper function to safely parse float and handle NaN
+  const safeParseFloat = (value: any, defaultValue: number = 0): number => {
+    const parsed = parseFloat(value);
+    return isNaN(parsed) ? defaultValue : parsed;
+  };
+
   const addToCart = (product: any) => {
     const existingItem = cart.find((item) => item.product_id === product.id);
-    
+
     if (existingItem) {
       // Recalculate totals when incrementing quantity
       setCart(
         cart.map((item) => {
           if (item.product_id === product.id) {
             const updated = { ...item, quantity: item.quantity + 1 };
-            const itemTotal = updated.unit_price * updated.quantity - updated.discount_amount;
-            const itemGst = includeGst ? (itemTotal * updated.gst_rate) / 100 : 0;
+            const itemTotal = (updated.unit_price || 0) * (updated.quantity || 0) - (updated.discount_amount || 0);
+            const itemGst = includeGst ? (itemTotal * (updated.gst_rate || 0)) / 100 : 0;
             updated.total_amount = itemTotal + itemGst;
             return updated;
           }
@@ -199,8 +205,8 @@ export default function POSPage() {
         })
       );
     } else {
-      const gstRate = parseFloat(product.gst_rate) || 0;
-      const unitPrice = parseFloat(product.selling_price);
+      const gstRate = safeParseFloat(product.gst_rate, 0);
+      const unitPrice = safeParseFloat(product.selling_price, 0);
       const quantity = 1;
       const itemTotal = unitPrice * quantity;
       const itemGst = includeGst ? (itemTotal * gstRate) / 100 : 0;
@@ -233,8 +239,12 @@ export default function POSPage() {
           
           // Recalculate totals
           if (field === 'quantity' || field === 'discount_amount') {
-            const itemTotal = updated.unit_price * updated.quantity - updated.discount_amount;
-            const itemGst = includeGst ? (itemTotal * updated.gst_rate) / 100 : 0;
+            const unitPrice = safeParseFloat(updated.unit_price, 0);
+            const quantity = safeParseFloat(updated.quantity, 0);
+            const discount = safeParseFloat(updated.discount_amount, 0);
+            const gstRate = safeParseFloat(updated.gst_rate, 0);
+            const itemTotal = unitPrice * quantity - discount;
+            const itemGst = includeGst ? (itemTotal * gstRate) / 100 : 0;
             updated.total_amount = itemTotal + itemGst;
           }
           
@@ -250,13 +260,21 @@ export default function POSPage() {
   };
 
   const calculateTotals = () => {
-    const subtotal = cart.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
-    const totalDiscount = cart.reduce((sum, item) => sum + item.discount_amount, 0);
-    const billDiscount = discountAmount || (subtotal * discountPercent) / 100;
+    const subtotal = cart.reduce((sum, item) => {
+      const unitPrice = safeParseFloat(item.unit_price, 0);
+      const quantity = safeParseFloat(item.quantity, 0);
+      return sum + (unitPrice * quantity);
+    }, 0);
+    const totalDiscount = cart.reduce((sum, item) => sum + safeParseFloat(item.discount_amount, 0), 0);
+    const billDiscount = safeParseFloat(discountAmount, 0) || (subtotal * safeParseFloat(discountPercent, 0)) / 100;
     const finalSubtotal = subtotal - totalDiscount - billDiscount;
     const totalGst = includeGst ? cart.reduce((sum, item) => {
-      const itemTotal = item.unit_price * item.quantity - item.discount_amount;
-      return sum + (itemTotal * item.gst_rate) / 100;
+      const unitPrice = safeParseFloat(item.unit_price, 0);
+      const quantity = safeParseFloat(item.quantity, 0);
+      const discount = safeParseFloat(item.discount_amount, 0);
+      const gstRate = safeParseFloat(item.gst_rate, 0);
+      const itemTotal = unitPrice * quantity - discount;
+      return sum + (itemTotal * gstRate) / 100;
     }, 0) : 0;
     const totalBeforeRound = finalSubtotal + totalGst;
     // Round off to nearest whole number for easier payment
@@ -271,8 +289,12 @@ export default function POSPage() {
     if (cart.length > 0) {
       setCart(
         cart.map((item) => {
-          const itemTotal = item.unit_price * item.quantity - item.discount_amount;
-          const itemGst = includeGst ? (itemTotal * item.gst_rate) / 100 : 0;
+          const unitPrice = safeParseFloat(item.unit_price, 0);
+          const quantity = safeParseFloat(item.quantity, 0);
+          const discount = safeParseFloat(item.discount_amount, 0);
+          const gstRate = safeParseFloat(item.gst_rate, 0);
+          const itemTotal = unitPrice * quantity - discount;
+          const itemGst = includeGst ? (itemTotal * gstRate) / 100 : 0;
           return { ...item, total_amount: itemTotal + itemGst };
         })
       );
@@ -354,8 +376,8 @@ export default function POSPage() {
                   >
                     <div>
                       <div className="font-medium text-gray-800">{product.name}</div>
-                      <div className="text-sm text-gray-600">SKU: {product.sku} | Stock: {product.stock_quantity}</div>
-                      <div className="text-sm font-semibold text-blue-600">₹{product.selling_price}</div>
+                      <div className="text-sm text-gray-600">SKU: {product.sku} | Stock: {safeParseFloat(product.stock_quantity, 0).toFixed(3)}</div>
+                      <div className="text-sm font-semibold text-blue-600">₹{safeParseFloat(product.selling_price, 0).toFixed(2)}</div>
                     </div>
                     <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
                       Add
@@ -395,20 +417,23 @@ export default function POSPage() {
                           min="0.001"
                           step="0.001"
                           value={item.quantity}
-                          onChange={(e) => updateCartItem(item.product_id, 'quantity', parseFloat(e.target.value))}
+                          onChange={(e) => {
+                            const value = safeParseFloat(e.target.value, 0);
+                            updateCartItem(item.product_id, 'quantity', value);
+                          }}
                           className="w-full px-2 py-1 border border-gray-300 rounded text-sm bg-white text-gray-900"
                         />
                       </div>
                       <div>
                         <label className="text-xs text-gray-600 block mb-1">Price</label>
                         <div className="px-2 py-1 text-sm font-medium text-gray-900 bg-gray-50 rounded border border-gray-200">
-                          ₹{item.unit_price.toFixed(2)}
+                          ₹{safeParseFloat(item.unit_price, 0).toFixed(2)}
                         </div>
                       </div>
                       <div>
                         <label className="text-xs text-gray-600 block mb-1">Total</label>
                         <div className="px-2 py-1 text-sm font-semibold text-blue-600 bg-blue-50 rounded border border-blue-200">
-                          ₹{item.total_amount.toFixed(2)}
+                          ₹{safeParseFloat(item.total_amount, 0).toFixed(2)}
                         </div>
                       </div>
                     </div>
@@ -506,7 +531,7 @@ export default function POSPage() {
                   max="100"
                   value={discountPercent}
                   onChange={(e) => {
-                    setDiscountPercent(parseFloat(e.target.value) || 0);
+                    setDiscountPercent(safeParseFloat(e.target.value, 0));
                     setDiscountAmount(0);
                   }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-gray-900"
@@ -519,7 +544,7 @@ export default function POSPage() {
                   min="0"
                   value={discountAmount}
                   onChange={(e) => {
-                    setDiscountAmount(parseFloat(e.target.value) || 0);
+                    setDiscountAmount(safeParseFloat(e.target.value, 0));
                     setDiscountPercent(0);
                   }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-gray-900"
