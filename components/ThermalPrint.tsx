@@ -393,36 +393,36 @@ export default function ThermalPrint({ bill }: ThermalPrintProps) {
           </table>
           <div class="divider"></div>
           <div class="summary">
-            <div class="summary-row"><span><strong>Sub Total:</strong></span><span>₹${subtotal.toFixed(2)}</span></div>
-            ${discount > 0 ? `<div class="summary-row"><span>(-) Discount:</span><span>₹${discount.toFixed(2)}</span></div>` : ''}
+            <div class="summary-row"><span><strong>Sub Total:</strong></span><span>${formatCurrency(subtotal)}</span></div>
+            ${discount > 0 ? `<div class="summary-row"><span>(-) Discount:</span><span>${formatCurrency(discount)}</span></div>` : ''}
             ${gstRates.map((rate) => {
               const rateNum = parseFloat(rate);
               const { cgst, sgst, taxable } = gstBreakdown[rateNum];
               if (rateNum > 0 && taxable > 0) {
                 return `
-                  <div class="summary-row"><span>CGST ${rateNum.toFixed(2)}% (Taxable ₹${taxable.toFixed(2)}):</span><span>₹${cgst.toFixed(2)}</span></div>
-                  <div class="summary-row"><span>SGST ${rateNum.toFixed(2)}% (Taxable ₹${taxable.toFixed(2)}):</span><span>₹${sgst.toFixed(2)}</span></div>
+                  <div class="summary-row"><span>CGST ${formatPercentage(rateNum)} (Taxable ${formatCurrency(taxable)}):</span><span>${formatCurrency(cgst)}</span></div>
+                  <div class="summary-row"><span>SGST ${formatPercentage(rateNum)} (Taxable ${formatCurrency(taxable)}):</span><span>${formatCurrency(sgst)}</span></div>
                 `;
               } else if (rateNum === 0 && taxable > 0) {
                 return `
-                  <div class="summary-row"><span>CGST 0% (Taxable ₹${taxable.toFixed(2)}):</span><span>₹0.00</span></div>
-                  <div class="summary-row"><span>SGST 0% (Taxable ₹${taxable.toFixed(2)}):</span><span>₹0.00</span></div>
+                  <div class="summary-row"><span>CGST 0% (Taxable ${formatCurrency(taxable)}):</span><span>${formatCurrency(0)}</span></div>
+                  <div class="summary-row"><span>SGST 0% (Taxable ${formatCurrency(taxable)}):</span><span>${formatCurrency(0)}</span></div>
                 `;
               }
               return '';
             }).join('')}
-            ${Math.abs(roundOff) > 0.01 ? `<div class="summary-row"><span>Round Off:</span><span>₹${roundOff > 0 ? '+' : ''}${roundOff.toFixed(2)}</span></div>` : ''}
+            ${Math.abs(roundOff) > 0.01 ? `<div class="summary-row"><span>Round Off:</span><span>${roundOff > 0 ? '+' : ''}${formatCurrency(roundOff)}</span></div>` : ''}
           </div>
           <div class="divider"></div>
           <div style="margin: 5px 0; font-size: 10px;">
             <div>Number of Items: ${numItems}</div>
-            <div>Total Quantity: ${totalQty.toFixed(3)}</div>
+            <div>Total Quantity: ${formatQuantity(totalQty)}</div>
           </div>
           <div class="divider"></div>
           <div class="total-row right">
-            <div>TOTAL: ₹${total.toFixed(2)}</div>
-            <div>${formatPaymentMode(bill.payment_mode)}: ₹${total.toFixed(2)}</div>
-            ${bill.payment_mode === 'cash' ? `<div>Cash tendered: ₹${total.toFixed(2)}</div>` : ''}
+            <div>TOTAL: ${formatCurrency(total)}</div>
+            <div>${formatPaymentMode(bill.payment_mode)}: ${formatCurrency(total)}</div>
+            ${bill.payment_mode === 'cash' ? `<div>Cash tendered: ${formatCurrency(total)}</div>` : ''}
           </div>
           <div class="divider"></div>
           <div class="footer">

@@ -352,7 +352,7 @@ export default function InventoryPage() {
                 <div className="bg-white rounded-lg shadow p-4 border-l-4 border-orange-500">
                   <div className="text-sm text-gray-600 mb-1">Total Products</div>
                   <div className="text-2xl font-bold text-gray-800">
-                    {analytics.total_products?.toLocaleString('en-IN') || '0'}
+                    {formatNumber(analytics.total_products, 0)}
                   </div>
                 </div>
               </>
