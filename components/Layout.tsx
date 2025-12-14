@@ -49,7 +49,12 @@ export default function Layout({ children }: LayoutProps) {
       { href: '/inventory', label: 'Inventory', icon: '📋' },
     ] : []),
     { href: '/bills', label: 'Bills', icon: '🧾' },
-    ...(!isCashier() ? [{ href: '/reports', label: 'Reports', icon: '📈' }] : []),
+    ...(!isCashier() ? [
+      { href: '/purchases', label: 'Purchases', icon: '📥' },
+      { href: '/purchase-returns', label: 'Purchase Returns', icon: '↩️' },
+      { href: '/sales-returns', label: 'Sales Returns', icon: '↪️' },
+      { href: '/reports', label: 'Reports', icon: '📈' },
+    ] : []),
     ...(isAdmin() || isSuperAdmin() ? [{ href: '/settings', label: 'Settings', icon: '⚙️' }] : []),
   ];
 
