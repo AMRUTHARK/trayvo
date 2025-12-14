@@ -37,13 +37,34 @@ async function logLoginAttempt(userId, shopId, username, req, status, failureRea
     const userAgent = req.headers['user-agent'] || 'Unknown';
     const deviceInfo = parseUserAgent(userAgent);
 
+    // Validate userId: for successful logins, userId must be a valid number
+    // For failed logins, userId can be null/undefined
+    let validUserId = null;
+    if (userId !== null && userId !== undefined) {
+      const numUserId = Number(userId);
+      if (!isNaN(numUserId) && numUserId > 0) {
+        validUserId = numUserId;
+      } else if (status === 'success') {
+        // For successful logins, we must have a valid userId
+        console.error('Warning: Successful login attempt with invalid userId:', userId);
+        // Still try to log, but this indicates a data integrity issue
+      }
+    }
+
+    // For successful logins, we require a valid userId
+    // If migration hasn't been run and userId is null, skip logging to avoid error
+    if (status === 'success' && !validUserId) {
+      console.error('Cannot log successful login: userId is invalid or null. Please run migration_login_history_null_user.sql');
+      return; // Skip logging if we can't safely log a successful login
+    }
+
     await pool.execute(
       `INSERT INTO login_history 
        (user_id, shop_id, username, ip_address, user_agent, device_type, browser, os, login_status, failure_reason)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        userId || null,
-        shopId || null,
+        validUserId,
+        shopId && !isNaN(Number(shopId)) && Number(shopId) > 0 ? Number(shopId) : null,
         username || 'Unknown',
         ipAddress,
         userAgent,
@@ -56,6 +77,11 @@ async function logLoginAttempt(userId, shopId, username, req, status, failureRea
     );
   } catch (error) {
     // Don't fail login if logging fails, just log the error
+    // If it's a NULL constraint error and status is 'failed', it's okay to skip
+    if (error.code === 'ER_BAD_NULL_ERROR' && status === 'failed') {
+      console.warn('Cannot log failed login attempt: user_id column does not allow NULL. Please run migration_login_history_null_user.sql');
+      return;
+    }
     console.error('Error logging login attempt:', error);
   }
 }
@@ -378,6 +404,15 @@ router.post('/login', authLimiter, [
       });
     }
 
+    // Validate user.id exists (should always be true, but defensive check)
+    if (!user.id || isNaN(Number(user.id))) {
+      console.error('Critical error: User object missing valid id after successful authentication:', user);
+      return res.status(500).json({
+        success: false,
+        message: 'Authentication error: Invalid user data. Please contact system administrator.'
+      });
+    }
+
     // Generate JWT token (shop_id can be null for super admin)
     const token = jwt.sign(
       { userId: user.id, shopId: user.shop_id, role: user.role },
@@ -385,7 +420,7 @@ router.post('/login', authLimiter, [
       { expiresIn: process.env.JWT_EXPIRES_IN || '30d' }
     );
 
-    // Log successful login attempt
+    // Log successful login attempt (user.id is guaranteed to be valid at this point)
     await logLoginAttempt(user.id, user.shop_id, username, req, 'success', null);
 
     res.json({

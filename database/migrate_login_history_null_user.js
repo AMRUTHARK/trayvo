@@ -19,12 +19,22 @@ async function migrate() {
     const envPath = path.join(__dirname, '..', 'backend', '.env');
     require('dotenv').config({ path: envPath });
     
+    // SSL configuration for TiDB Serverless (required)
+    // Enable SSL for TiDB Cloud connections, disable for local development
+    const sslConfig = process.env.DB_HOST && process.env.DB_HOST.includes('tidbcloud.com') ? {
+      rejectUnauthorized: true
+    } : (process.env.NODE_ENV === 'production' ? {
+      rejectUnauthorized: true
+    } : false);
+    
     // Connect to database
     connection = await mysql.createConnection({
       host: process.env.DB_HOST || 'localhost',
       user: process.env.DB_USER || 'root',
       password: process.env.DB_PASSWORD || '',
       database: process.env.DB_NAME || 'multi_shop_billing',
+      port: parseInt(process.env.DB_PORT) || 3306,
+      ssl: sslConfig
     });
 
     console.log('Connected to database');
