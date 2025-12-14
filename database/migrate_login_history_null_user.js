@@ -27,41 +27,26 @@ async function migrate() {
       rejectUnauthorized: true
     } : false);
     
-    // Connect to database
+    // Connect to database with multipleStatements enabled for dynamic SQL
     connection = await mysql.createConnection({
       host: process.env.DB_HOST || 'localhost',
       user: process.env.DB_USER || 'root',
       password: process.env.DB_PASSWORD || '',
       database: process.env.DB_NAME || 'multi_shop_billing',
       port: parseInt(process.env.DB_PORT) || 3306,
-      ssl: sslConfig
+      ssl: sslConfig,
+      multipleStatements: true // Required for dynamic SQL (PREPARE/EXECUTE)
     });
 
     console.log('Connected to database');
 
     // Read and execute migration SQL
+    // Use query() instead of execute() to support dynamic SQL (PREPARE/EXECUTE)
     const sqlPath = path.join(__dirname, 'migration_login_history_null_user.sql');
     const sql = fs.readFileSync(sqlPath, 'utf8');
     
-    // Split by semicolons and execute each statement
-    const statements = sql.split(';').filter(s => s.trim().length > 0);
-    
-    for (const statement of statements) {
-      if (statement.trim() && !statement.trim().startsWith('--')) {
-        try {
-          await connection.execute(statement);
-        } catch (error) {
-          // Skip if statement fails due to already being applied
-          if (error.code === 'ER_CANT_DROP_FIELD_OR_KEY' || 
-              error.code === 'ER_DUP_KEYNAME' ||
-              error.message.includes('does not exist')) {
-            console.log(`Skipping statement (may already be applied): ${statement.substring(0, 50)}...`);
-          } else {
-            throw error;
-          }
-        }
-      }
-    }
+    console.log('Running migration...');
+    await connection.query(sql);
 
     console.log('\n✅ Migration completed successfully!');
     console.log('user_id column in login_history table can now be NULL for failed login attempts.');
