@@ -132,8 +132,20 @@ router.post('/shops', [
   body('shop_name').trim().notEmpty().withMessage('Shop name is required'),
   body('owner_name').trim().notEmpty().withMessage('Owner name is required'),
   body('email').isEmail().withMessage('Valid email is required'),
-  body('username').optional().trim().isLength({ min: 3 }).withMessage('Username must be at least 3 characters'),
-  body('password').optional().isLength({ min: 6 }).withMessage('Password must be at least 6 characters')
+  // Optional fields - only validate if provided (not empty)
+  body('username')
+    .optional({ checkFalsy: true, values: 'falsy' })
+    .trim()
+    .isLength({ min: 3 })
+    .withMessage('Username must be at least 3 characters'),
+  body('password')
+    .optional({ checkFalsy: true, values: 'falsy' })
+    .isLength({ min: 6 })
+    .withMessage('Password must be at least 6 characters'),
+  // Optional fields that can be completely empty (no validation)
+  body('phone').optional({ checkFalsy: true }).trim(),
+  body('address').optional({ checkFalsy: true }).trim(),
+  body('gstin').optional({ checkFalsy: true }).trim().isLength({ max: 15 }).withMessage('GSTIN must be at most 15 characters')
 ], async (req, res, next) => {
   try {
     const errors = validationResult(req);
