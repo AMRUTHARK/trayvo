@@ -6,6 +6,7 @@ import api from '@/lib/api';
 import toast from 'react-hot-toast';
 import { getStoredUser, isSuperAdmin, isCashier } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
+import ExcelJS from 'exceljs';
 
 export default function InventoryPage() {
   const router = useRouter();
@@ -116,6 +117,132 @@ export default function InventoryPage() {
     }
   };
 
+  const exportLedger = async (format: 'excel' | 'csv') => {
+    if (ledger.length === 0) {
+      toast.error('No ledger entries to export');
+      return;
+    }
+
+    try {
+      if (format === 'excel') {
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Stock Ledger');
+
+        // Define headers
+        const headers = [
+          'Date',
+          'Product Name',
+          'SKU',
+          'Transaction Type',
+          'Quantity Change',
+          'Quantity Before',
+          'Quantity After',
+          'Notes',
+        ];
+
+        // Add headers
+        worksheet.addRow(headers);
+        
+        // Style header row
+        const headerRow = worksheet.getRow(1);
+        headerRow.font = { bold: true };
+        headerRow.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFE0E0E0' },
+        };
+
+        // Add data rows
+        ledger.forEach((entry) => {
+          worksheet.addRow([
+            new Date(entry.created_at).toLocaleString(),
+            entry.product_name || '',
+            entry.sku || '',
+            entry.transaction_type || '',
+            entry.quantity_change || 0,
+            entry.quantity_before || 0,
+            entry.quantity_after || 0,
+            entry.notes || '',
+          ]);
+        });
+
+        // Auto-fit columns
+        worksheet.columns.forEach((column) => {
+          column.width = 18;
+        });
+
+        // Generate Excel file
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        });
+
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        const shopName = isSuperAdmin() && selectedShopId
+          ? shops.find(s => s.id === selectedShopId)?.shop_name || 'all-shops'
+          : 'ledger';
+        link.download = `stock-ledger-${shopName}-${new Date().toISOString().split('T')[0]}.xlsx`;
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+
+        toast.success('Ledger exported to Excel successfully');
+      } else {
+        // CSV export
+        const headers = [
+          'Date',
+          'Product Name',
+          'SKU',
+          'Transaction Type',
+          'Quantity Change',
+          'Quantity Before',
+          'Quantity After',
+          'Notes',
+        ];
+
+        const csvRows = [
+          headers.join(','),
+          ...ledger.map((entry) =>
+            [
+              `"${new Date(entry.created_at).toLocaleString().replace(/"/g, '""')}"`,
+              `"${(entry.product_name || '').replace(/"/g, '""')}"`,
+              `"${(entry.sku || '').replace(/"/g, '""')}"`,
+              `"${(entry.transaction_type || '').replace(/"/g, '""')}"`,
+              entry.quantity_change || 0,
+              entry.quantity_before || 0,
+              entry.quantity_after || 0,
+              `"${(entry.notes || '').replace(/"/g, '""')}"`,
+            ].join(',')
+          ),
+        ];
+
+        const csvContent = csvRows.join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        const shopName = isSuperAdmin() && selectedShopId
+          ? shops.find(s => s.id === selectedShopId)?.shop_name || 'all-shops'
+          : 'ledger';
+        link.download = `stock-ledger-${shopName}-${new Date().toISOString().split('T')[0]}.csv`;
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+
+        toast.success('Ledger exported to CSV successfully');
+      }
+    } catch (error) {
+      console.error('Error exporting ledger:', error);
+      toast.error('Failed to export ledger. Please try again.');
+    }
+  };
+
   const handleAdjust = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -187,8 +314,25 @@ export default function InventoryPage() {
 
           <div className="p-6">
             {activeTab === 'ledger' && (
-              <div className="overflow-x-auto">
-                <table className="w-full">
+              <div className="space-y-4">
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => exportLedger('excel')}
+                    disabled={ledger.length === 0}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    📊 Export Excel
+                  </button>
+                  <button
+                    onClick={() => exportLedger('csv')}
+                    disabled={ledger.length === 0}
+                    className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    📄 Export CSV
+                  </button>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
@@ -247,7 +391,29 @@ export default function InventoryPage() {
                       ))
                     )}
                   </tbody>
+                  {ledger.length > 0 && (
+                    <tfoot className="bg-gray-100">
+                      <tr>
+                        <td colSpan={3} className="px-6 py-3 text-sm font-semibold text-gray-700">
+                          Total Transactions: {ledger.length}
+                        </td>
+                        <td colSpan={4} className="px-6 py-3 text-sm text-gray-600">
+                          {(() => {
+                            const typeCounts: { [key: string]: number } = {};
+                            ledger.forEach((entry) => {
+                              const type = entry.transaction_type || 'unknown';
+                              typeCounts[type] = (typeCounts[type] || 0) + 1;
+                            });
+                            return Object.entries(typeCounts)
+                              .map(([type, count]) => `${type}: ${count}`)
+                              .join(' | ');
+                          })()}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  )}
                 </table>
+                </div>
               </div>
             )}
 

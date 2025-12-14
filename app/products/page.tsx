@@ -374,6 +374,144 @@ export default function ProductsPage() {
     }
   };
 
+  const exportProducts = async (format: 'excel' | 'csv') => {
+    if (products.length === 0) {
+      toast.error('No products to export');
+      return;
+    }
+
+    try {
+      if (format === 'excel') {
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Products');
+
+        // Define headers
+        const headers = [
+          'Name',
+          'SKU',
+          'Barcode',
+          'Category',
+          'Unit',
+          'Cost Price',
+          'Selling Price',
+          'GST Rate %',
+          'Stock Quantity',
+          'Min Stock Level',
+          'Description',
+        ];
+
+        // Add headers
+        worksheet.addRow(headers);
+        
+        // Style header row
+        const headerRow = worksheet.getRow(1);
+        headerRow.font = { bold: true };
+        headerRow.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFE0E0E0' },
+        };
+
+        // Add data rows
+        products.forEach((product) => {
+          worksheet.addRow([
+            product.name || '',
+            product.sku || '',
+            product.barcode || '',
+            product.category_name || 'Uncategorized',
+            product.unit || 'pcs',
+            product.cost_price || 0,
+            product.selling_price || 0,
+            product.gst_rate || 0,
+            product.stock_quantity || 0,
+            product.min_stock_level || 0,
+            product.description || '',
+          ]);
+        });
+
+        // Auto-fit columns
+        worksheet.columns.forEach((column) => {
+          column.width = 15;
+        });
+
+        // Generate Excel file
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        });
+
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        const shopName = isSuperAdmin() && selectedShopId
+          ? shops.find(s => s.id === selectedShopId)?.shop_name || 'all-shops'
+          : 'products';
+        link.download = `products-${shopName}-${new Date().toISOString().split('T')[0]}.xlsx`;
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+
+        toast.success('Products exported to Excel successfully');
+      } else {
+        // CSV export
+        const headers = [
+          'Name',
+          'SKU',
+          'Barcode',
+          'Category',
+          'Unit',
+          'Cost Price',
+          'Selling Price',
+          'GST Rate %',
+          'Stock Quantity',
+          'Min Stock Level',
+          'Description',
+        ];
+
+        const csvRows = [
+          headers.join(','),
+          ...products.map((product) =>
+            [
+              `"${(product.name || '').replace(/"/g, '""')}"`,
+              `"${(product.sku || '').replace(/"/g, '""')}"`,
+              `"${(product.barcode || '').replace(/"/g, '""')}"`,
+              `"${(product.category_name || 'Uncategorized').replace(/"/g, '""')}"`,
+              `"${(product.unit || 'pcs').replace(/"/g, '""')}"`,
+              product.cost_price || 0,
+              product.selling_price || 0,
+              product.gst_rate || 0,
+              product.stock_quantity || 0,
+              product.min_stock_level || 0,
+              `"${(product.description || '').replace(/"/g, '""')}"`,
+            ].join(',')
+          ),
+        ];
+
+        const csvContent = csvRows.join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        const shopName = isSuperAdmin() && selectedShopId
+          ? shops.find(s => s.id === selectedShopId)?.shop_name || 'all-shops'
+          : 'products';
+        link.download = `products-${shopName}-${new Date().toISOString().split('T')[0]}.csv`;
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+
+        toast.success('Products exported to CSV successfully');
+      }
+    } catch (error) {
+      console.error('Error exporting products:', error);
+      toast.error('Failed to export products. Please try again.');
+    }
+  };
+
   const handleImport = async () => {
     if (!importFile) {
       toast.error('Please select a CSV file');
@@ -410,6 +548,20 @@ export default function ProductsPage() {
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-gray-800">Products</h1>
           <div className="flex gap-2">
+            <button
+              onClick={() => exportProducts('excel')}
+              disabled={products.length === 0}
+              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              📊 Export Excel
+            </button>
+            <button
+              onClick={() => exportProducts('csv')}
+              disabled={products.length === 0}
+              className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              📄 Export CSV
+            </button>
             <button
               onClick={() => setShowImportModal(true)}
               className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
