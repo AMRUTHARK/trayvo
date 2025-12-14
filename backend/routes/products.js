@@ -20,7 +20,7 @@ const upload = multer({ dest: 'uploads/' });
 // Get all products with filters
 router.get('/', async (req, res, next) => {
   try {
-    const { search, category_id, low_stock, page = 1, limit = 50 } = req.query;
+    const { search, category_id, low_stock, page = 1, limit = 50, skip_count } = req.query;
     const pageNum = parseInt(page) || 1;
     const limitNum = parseInt(limit) || 50;
     const offset = (pageNum - 1) * limitNum;
@@ -40,14 +40,28 @@ router.get('/', async (req, res, next) => {
              c.id as category_id, c.name as category_name
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
-      WHERE p.shop_id = ?
+      WHERE p.shop_id = ? AND p.is_active = TRUE
     `;
     const params = [req.shopId];
 
     if (search) {
-      query += ' AND (LOWER(p.name) LIKE LOWER(?) OR LOWER(p.sku) LIKE LOWER(?) OR LOWER(p.barcode) LIKE LOWER(?))';
-      const searchTerm = `%${search}%`;
-      params.push(searchTerm, searchTerm, searchTerm);
+      const searchTerm = search.trim();
+      // Optimized search: prioritize exact matches and prefix matches (can use indexes)
+      // This is faster than LOWER() on both sides which prevents index usage
+      query += ` AND (
+        p.name = ? OR p.sku = ? OR p.barcode = ?
+        OR p.name LIKE ? OR p.sku LIKE ? OR p.barcode LIKE ?
+        OR LOWER(p.name) LIKE LOWER(?) OR LOWER(p.sku) LIKE LOWER(?) OR LOWER(p.barcode) LIKE LOWER(?)
+      )`;
+      const exactTerm = searchTerm;
+      const prefixTerm = `${searchTerm}%`;
+      const wildcardTerm = `%${searchTerm}%`;
+      // Try exact match first (fastest with indexes)
+      params.push(exactTerm, exactTerm, exactTerm);
+      // Then prefix match (can use index)
+      params.push(prefixTerm, prefixTerm, prefixTerm);
+      // Finally wildcard match (fallback, slower but more flexible)
+      params.push(wildcardTerm, wildcardTerm, wildcardTerm);
     }
 
     if (category_id) {
@@ -64,37 +78,52 @@ router.get('/', async (req, res, next) => {
 
     const [products] = await pool.execute(query, params);
 
-    // Get total count
-    let countQuery = 'SELECT COUNT(*) as total FROM products WHERE shop_id = ?';
-    const countParams = [req.shopId];
+    // Skip count query for POS searches (faster performance)
+    let total = null;
+    let pagination = null;
+    
+    if (skip_count !== 'true') {
+      // Only run count query if not skipping (for product listing page)
+      let countQuery = 'SELECT COUNT(*) as total FROM products WHERE shop_id = ? AND is_active = TRUE';
+      const countParams = [req.shopId];
 
-    if (search) {
-      countQuery += ' AND (LOWER(name) LIKE LOWER(?) OR LOWER(sku) LIKE LOWER(?) OR LOWER(barcode) LIKE LOWER(?))';
-      const searchTerm = `%${search}%`;
-      countParams.push(searchTerm, searchTerm, searchTerm);
-    }
+      if (search) {
+        const searchTerm = search.trim();
+        countQuery += ` AND (
+          name = ? OR sku = ? OR barcode = ?
+          OR name LIKE ? OR sku LIKE ? OR barcode LIKE ?
+          OR LOWER(name) LIKE LOWER(?) OR LOWER(sku) LIKE LOWER(?) OR LOWER(barcode) LIKE LOWER(?)
+        )`;
+        const exactTerm = searchTerm;
+        const prefixTerm = `${searchTerm}%`;
+        const wildcardTerm = `%${searchTerm}%`;
+        countParams.push(exactTerm, exactTerm, exactTerm, prefixTerm, prefixTerm, prefixTerm, wildcardTerm, wildcardTerm, wildcardTerm);
+      }
 
-    if (category_id) {
-      countQuery += ' AND category_id = ?';
-      countParams.push(parseInt(category_id));
-    }
+      if (category_id) {
+        countQuery += ' AND category_id = ?';
+        countParams.push(parseInt(category_id));
+      }
 
-    if (low_stock === 'true') {
-      countQuery += ' AND stock_quantity <= min_stock_level';
-    }
+      if (low_stock === 'true') {
+        countQuery += ' AND stock_quantity <= min_stock_level';
+      }
 
-    const [countResult] = await pool.execute(countQuery, countParams);
-    const total = countResult[0].total;
-
-    res.json({
-      success: true,
-      data: products,
-      pagination: {
+      const [countResult] = await pool.execute(countQuery, countParams);
+      total = countResult[0].total;
+      
+      pagination = {
         page: pageNum,
         limit: limitNum,
         total,
         pages: Math.ceil(total / limitNum)
-      }
+      };
+    }
+
+    res.json({
+      success: true,
+      data: products,
+      pagination: pagination
     });
   } catch (error) {
     next(error);

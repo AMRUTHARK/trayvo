@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Layout from '@/components/Layout';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
@@ -34,6 +34,9 @@ export default function POSPage() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [holdBills, setHoldBills] = useState<any[]>([]);
   const [showHoldBills, setShowHoldBills] = useState(false);
+  
+  // Ref for abort controller to cancel previous requests
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     // Redirect Super Admin away from POS page
@@ -45,14 +48,25 @@ export default function POSPage() {
   }, [router]);
 
   useEffect(() => {
+    // Cancel previous request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
     if (searchTerm.length > 2) {
       const timer = setTimeout(() => {
         searchProducts();
-      }, 300);
-      return () => clearTimeout(timer);
+      }, 500); // Increased debounce to 500ms for better performance
+      return () => {
+        clearTimeout(timer);
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+        }
+      };
     } else {
       setProducts([]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm]);
 
   const fetchHoldBills = async () => {
@@ -141,11 +155,27 @@ export default function POSPage() {
 
   const searchProducts = async () => {
     try {
+      // Cancel previous request if still pending
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+
+      // Create new abort controller for this request
+      abortControllerRef.current = new AbortController();
+      
       setSearchLoading(true);
-      const response = await api.get(`/products?search=${searchTerm}&limit=10`);
-      setProducts(response.data.data);
-    } catch (error) {
-      console.error('Search failed:', error);
+      const response = await api.get(
+        `/products?search=${encodeURIComponent(searchTerm)}&limit=10&skip_count=true`,
+        {
+          signal: abortControllerRef.current.signal
+        }
+      );
+      setProducts(response.data.data || []);
+    } catch (error: any) {
+      // Don't show error if request was aborted (user typed more)
+      if (error.name !== 'AbortError' && error.name !== 'CanceledError' && !error.response) {
+        console.error('Search failed:', error);
+      }
     } finally {
       setSearchLoading(false);
     }
