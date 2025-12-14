@@ -28,8 +28,8 @@ export default function POSPage() {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [paymentMode, setPaymentMode] = useState<'cash' | 'upi' | 'card' | 'mixed'>('cash');
-  const [discountPercent, setDiscountPercent] = useState(0);
-  const [discountAmount, setDiscountAmount] = useState(0);
+  const [discountPercent, setDiscountPercent] = useState<string | number>('');
+  const [discountAmount, setDiscountAmount] = useState<string | number>('');
   const [includeGst, setIncludeGst] = useState(true);
   const [loading, setLoading] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -130,8 +130,8 @@ export default function POSPage() {
       setCustomerName(billData.customerName || '');
       setCustomerPhone(billData.customerPhone || '');
       setPaymentMode(billData.paymentMode || 'cash');
-      setDiscountPercent(billData.discountPercent || 0);
-      setDiscountAmount(billData.discountAmount || 0);
+      setDiscountPercent(billData.discountPercent || '');
+      setDiscountAmount(billData.discountAmount || '');
       setIncludeGst(billData.includeGst !== undefined ? billData.includeGst : true);
       setShowHoldBills(false);
       toast.success('Bill recalled successfully');
@@ -267,7 +267,9 @@ export default function POSPage() {
       return sum + (unitPrice * quantity);
     }, 0);
     const totalDiscount = cart.reduce((sum, item) => sum + safeParseFloat(item.discount_amount, 0), 0);
-    const billDiscount = safeParseFloat(discountAmount, 0) || (subtotal * safeParseFloat(discountPercent, 0)) / 100;
+    const discountAmountNum = safeParseFloat(String(discountAmount), 0);
+    const discountPercentNum = safeParseFloat(String(discountPercent), 0);
+    const billDiscount = discountAmountNum || (subtotal * discountPercentNum) / 100;
     const finalSubtotal = subtotal - totalDiscount - billDiscount;
     const totalGst = includeGst ? cart.reduce((sum, item) => {
       const unitPrice = safeParseFloat(item.unit_price, 0);
@@ -322,7 +324,7 @@ export default function POSPage() {
           discount_amount: item.discount_amount,
         })),
         discount_amount: billDiscount,
-        discount_percent: discountPercent,
+        discount_percent: discountPercentNum,
         payment_mode: paymentMode,
         include_gst: includeGst,
         notes: null,
@@ -334,8 +336,8 @@ export default function POSPage() {
         setCart([]);
         setCustomerName('');
         setCustomerPhone('');
-        setDiscountPercent(0);
-        setDiscountAmount(0);
+        setDiscountPercent('');
+        setDiscountAmount('');
         setPaymentMode('cash');
         // Optionally redirect to bill details
         router.push(`/bills/${response.data.data.id}`);
@@ -532,8 +534,9 @@ export default function POSPage() {
                   max="100"
                   value={discountPercent}
                   onChange={(e) => {
-                    setDiscountPercent(safeParseFloat(e.target.value, 0));
-                    setDiscountAmount(0);
+                    const value = e.target.value;
+                    setDiscountPercent(value === '' ? '' : safeParseFloat(value, 0));
+                    setDiscountAmount('');
                   }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-gray-900"
                 />
@@ -545,8 +548,9 @@ export default function POSPage() {
                   min="0"
                   value={discountAmount}
                   onChange={(e) => {
-                    setDiscountAmount(safeParseFloat(e.target.value, 0));
-                    setDiscountPercent(0);
+                    const value = e.target.value;
+                    setDiscountAmount(value === '' ? '' : safeParseFloat(value, 0));
+                    setDiscountPercent('');
                   }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-gray-900"
                 />
