@@ -153,31 +153,9 @@ function SidebarContent({
       <div className="flex flex-col items-center justify-center min-h-24 px-4 py-4" style={{ backgroundColor: 'rgb(74, 106, 177)' }}>
         <div className="w-full max-w-[300px]">
           {/* Always show Trayvo logo */}
-          <div className="flex justify-center mb-3">
+          <div className="flex justify-center">
             <CompanyLogo size="md" showText={true} className="text-white" />
           </div>
-          {/* Show shop name below Trayvo if user has a shop */}
-          {user.shop_name && (
-            <div className="flex justify-center mt-2 pt-2 border-t border-white border-opacity-30">
-              {user.shop_logo_url ? (
-                <ShopLogo 
-                  logoUrl={user.shop_logo_url} 
-                  shopName={user.shop_name} 
-                  size="sm" 
-                  showText={true} 
-                  className="text-white" 
-                />
-              ) : (
-                <ShopLogo 
-                  logoUrl={null} 
-                  shopName={user.shop_name} 
-                  size="sm" 
-                  showText={true} 
-                  className="text-white" 
-                />
-              )}
-            </div>
-          )}
         </div>
       </div>
       <nav className="flex-1 px-4 py-6 space-y-2">
