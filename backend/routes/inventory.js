@@ -100,6 +100,107 @@ router.get('/ledger', async (req, res, next) => {
   }
 });
 
+// Get inventory analytics/metrics
+router.get('/analytics', async (req, res, next) => {
+  try {
+    // For super admin, shop_id must be provided in query
+    if (req.isSuperAdmin && !req.shopId) {
+      return res.status(400).json({
+        success: false,
+        message: 'shop_id is required for super admin'
+      });
+    }
+
+    // Total inventory value at cost price
+    const [costValue] = await pool.execute(
+      `SELECT 
+        SUM(p.stock_quantity * p.cost_price) as total_cost_value,
+        COUNT(*) as total_products,
+        SUM(p.stock_quantity) as total_stock_quantity,
+        AVG(p.stock_quantity * p.cost_price) as avg_stock_value
+       FROM products p
+       WHERE p.shop_id = ? AND p.is_active = TRUE`,
+      [req.shopId]
+    );
+
+    // Total inventory value at selling price
+    const [sellingValue] = await pool.execute(
+      `SELECT 
+        SUM(p.stock_quantity * p.selling_price) as total_selling_value
+       FROM products p
+       WHERE p.shop_id = ? AND p.is_active = TRUE`,
+      [req.shopId]
+    );
+
+    // Low stock count
+    const [lowStock] = await pool.execute(
+      `SELECT COUNT(*) as low_stock_count
+       FROM products
+       WHERE shop_id = ? AND is_active = TRUE 
+       AND stock_quantity <= min_stock_level AND stock_quantity > 0`,
+      [req.shopId]
+    );
+
+    // Out of stock count
+    const [outOfStock] = await pool.execute(
+      `SELECT COUNT(*) as out_of_stock_count
+       FROM products
+       WHERE shop_id = ? AND is_active = TRUE 
+       AND stock_quantity <= 0`,
+      [req.shopId]
+    );
+
+    // Products with stock
+    const [inStock] = await pool.execute(
+      `SELECT COUNT(*) as in_stock_count
+       FROM products
+       WHERE shop_id = ? AND is_active = TRUE 
+       AND stock_quantity > min_stock_level`,
+      [req.shopId]
+    );
+
+    // Top products by stock value (cost)
+    const [topProducts] = await pool.execute(
+      `SELECT 
+        p.id, p.name, p.sku, p.stock_quantity, p.cost_price, p.selling_price,
+        (p.stock_quantity * p.cost_price) as stock_value,
+        c.name as category_name
+       FROM products p
+       LEFT JOIN categories c ON p.category_id = c.id
+       WHERE p.shop_id = ? AND p.is_active = TRUE
+       ORDER BY (p.stock_quantity * p.cost_price) DESC
+       LIMIT 10`,
+      [req.shopId]
+    );
+
+    const costData = costValue[0] || {};
+    const sellingData = sellingValue[0] || {};
+    const totalCostValue = parseFloat(costData.total_cost_value || 0);
+    const totalSellingValue = parseFloat(sellingData.total_selling_value || 0);
+    const potentialProfit = totalSellingValue - totalCostValue;
+    const profitMargin = totalSellingValue > 0 ? ((potentialProfit / totalSellingValue) * 100) : 0;
+
+    res.json({
+      success: true,
+      data: {
+        total_cost_value: totalCostValue,
+        total_selling_value: totalSellingValue,
+        potential_profit: potentialProfit,
+        profit_margin: parseFloat(profitMargin.toFixed(2)),
+        total_products: parseInt(costData.total_products || 0),
+        total_stock_quantity: parseFloat(costData.total_stock_quantity || 0),
+        avg_stock_value: parseFloat(costData.avg_stock_value || 0),
+        low_stock_count: parseInt(lowStock[0]?.low_stock_count || 0),
+        out_of_stock_count: parseInt(outOfStock[0]?.out_of_stock_count || 0),
+        in_stock_count: parseInt(inStock[0]?.in_stock_count || 0),
+        top_products_by_value: topProducts
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Get low stock products
 router.get('/low-stock', async (req, res, next) => {
   try {

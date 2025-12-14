@@ -29,6 +29,8 @@ export default function InventoryPage() {
   const [shops, setShops] = useState<any[]>([]);
   const [selectedShopId, setSelectedShopId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [analytics, setAnalytics] = useState<any>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'ledger' | 'lowstock' | 'adjust'>('ledger');
   const [adjustForm, setAdjustForm] = useState({
     product_id: '',
@@ -47,11 +49,32 @@ export default function InventoryPage() {
   useEffect(() => {
     if (!isSuperAdmin() || selectedShopId) {
       fetchData();
+      fetchAnalytics();
       if (activeTab === 'adjust') {
         fetchProducts();
       }
     }
   }, [activeTab, selectedShopId]);
+
+  const fetchAnalytics = async () => {
+    try {
+      setAnalyticsLoading(true);
+      const params: any = {};
+      if (isSuperAdmin() && selectedShopId) {
+        params.shop_id = selectedShopId;
+      }
+      const response = await api.get('/inventory/analytics', { params });
+      setAnalytics(response.data.data || null);
+    } catch (error: any) {
+      // Only show error for actual failures (network/server errors)
+      if (error.response?.status >= 500 || error.request) {
+        toast.error('Failed to fetch analytics. Please try again.');
+      }
+      setAnalytics(null);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  };
 
   const fetchShops = async () => {
     try {
@@ -288,6 +311,130 @@ export default function InventoryPage() {
               </p>
             )}
           </div>
+        )}
+
+        {/* Analytics Metrics */}
+        {(!isSuperAdmin() || selectedShopId) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            {analyticsLoading ? (
+              <>
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="bg-white rounded-lg shadow p-4 animate-pulse">
+                    <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                    <div className="h-8 bg-gray-200 rounded w-1/2"></div>
+                  </div>
+                ))}
+              </>
+            ) : analytics ? (
+              <>
+                <div className="bg-white rounded-lg shadow p-4 border-l-4 border-blue-500">
+                  <div className="text-sm text-gray-600 mb-1">Total Inventory Value (Cost)</div>
+                  <div className="text-2xl font-bold text-gray-800">
+                    ₹{analytics.total_cost_value?.toLocaleString('en-IN', { maximumFractionDigits: 2 }) || '0'}
+                  </div>
+                </div>
+                <div className="bg-white rounded-lg shadow p-4 border-l-4 border-green-500">
+                  <div className="text-sm text-gray-600 mb-1">Total Inventory Value (Selling)</div>
+                  <div className="text-2xl font-bold text-gray-800">
+                    ₹{analytics.total_selling_value?.toLocaleString('en-IN', { maximumFractionDigits: 2 }) || '0'}
+                  </div>
+                </div>
+                <div className="bg-white rounded-lg shadow p-4 border-l-4 border-purple-500">
+                  <div className="text-sm text-gray-600 mb-1">Potential Profit</div>
+                  <div className="text-2xl font-bold text-gray-800">
+                    ₹{analytics.potential_profit?.toLocaleString('en-IN', { maximumFractionDigits: 2 }) || '0'}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    Margin: {analytics.profit_margin || '0'}%
+                  </div>
+                </div>
+                <div className="bg-white rounded-lg shadow p-4 border-l-4 border-orange-500">
+                  <div className="text-sm text-gray-600 mb-1">Total Products</div>
+                  <div className="text-2xl font-bold text-gray-800">
+                    {analytics.total_products?.toLocaleString('en-IN') || '0'}
+                  </div>
+                </div>
+              </>
+            ) : null}
+          </div>
+        )}
+
+        {/* Additional Analytics Metrics */}
+        {(!isSuperAdmin() || selectedShopId) && analytics && !analyticsLoading && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              <div className="bg-white rounded-lg shadow p-4">
+                <div className="text-sm text-gray-600 mb-1">Total Stock Quantity</div>
+                <div className="text-xl font-bold text-gray-800">
+                  {analytics.total_stock_quantity?.toLocaleString('en-IN', { maximumFractionDigits: 2 }) || '0'}
+                </div>
+              </div>
+              <div className="bg-white rounded-lg shadow p-4">
+                <div className="text-sm text-gray-600 mb-1">In Stock</div>
+                <div className="text-xl font-bold text-green-600">
+                  {analytics.in_stock_count?.toLocaleString('en-IN') || '0'}
+                </div>
+              </div>
+              <div className="bg-white rounded-lg shadow p-4">
+                <div className="text-sm text-gray-600 mb-1">Low Stock</div>
+                <div className="text-xl font-bold text-yellow-600">
+                  {analytics.low_stock_count?.toLocaleString('en-IN') || '0'}
+                </div>
+              </div>
+              <div className="bg-white rounded-lg shadow p-4">
+                <div className="text-sm text-gray-600 mb-1">Out of Stock</div>
+                <div className="text-xl font-bold text-red-600">
+                  {analytics.out_of_stock_count?.toLocaleString('en-IN') || '0'}
+                </div>
+              </div>
+            </div>
+
+            {/* Top Products by Stock Value */}
+            {analytics.top_products_by_value && analytics.top_products_by_value.length > 0 && (
+              <div className="bg-white rounded-lg shadow p-6 mb-6">
+                <h2 className="text-xl font-bold text-gray-800 mb-4">Top Products by Stock Value</h2>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stock Qty</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cost Price</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Selling Price</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stock Value</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {analytics.top_products_by_value.map((product: any, index: number) => (
+                        <tr key={product.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <div className="font-medium text-gray-900">{product.name}</div>
+                            <div className="text-gray-500 text-xs">{product.sku}</div>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                            {product.category_name || 'Uncategorized'}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                            {parseFloat(product.stock_quantity || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                            ₹{parseFloat(product.cost_price || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                            ₹{parseFloat(product.selling_price || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-sm font-semibold text-blue-600">
+                            ₹{parseFloat(product.stock_value || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {/* Tabs */}
