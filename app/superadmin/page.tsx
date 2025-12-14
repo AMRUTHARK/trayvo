@@ -551,8 +551,13 @@ export default function SuperAdminPage() {
                       type="text"
                       maxLength={15}
                       value={shopForm.gstin}
-                      onChange={(e) => setShopForm({ ...shopForm, gstin: e.target.value })}
+                      onChange={(e) => {
+                        // Convert to uppercase automatically
+                        const value = e.target.value.toUpperCase();
+                        setShopForm({ ...shopForm, gstin: value });
+                      }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
+                      style={{ textTransform: 'uppercase' }}
                     />
                   </div>
                 </div>
