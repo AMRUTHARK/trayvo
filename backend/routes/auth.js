@@ -56,7 +56,14 @@ router.post('/register', authLimiter, [
   body('email').isEmail().withMessage('Valid email is required'),
   body('username').trim().isLength({ min: 3 }).withMessage('Username must be at least 3 characters'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
-  body('role').isIn(['admin', 'cashier']).withMessage('Role must be admin or cashier'),
+  // Role is now server-enforced to 'admin' only - removed from validation but kept for backward compatibility
+  body('role').optional().custom((value) => {
+    // If role is provided, it must be 'admin' - cashier is not allowed via registration
+    if (value && value !== 'admin') {
+      throw new Error('Only shop admin can be created via registration. Cashiers must be created by shop admin after registration.');
+    }
+    return true;
+  }),
   body('gst_rates').optional().isArray().withMessage('GST rates must be an array'),
   body('gstin').optional().trim().isLength({ max: 15 }).withMessage('GSTIN must be at most 15 characters')
     .custom((value) => {
@@ -81,12 +88,16 @@ router.post('/register', authLimiter, [
     }
 
     const { registration_token, full_name, email, phone, username, password, role, gst_rates, gstin } = req.body;
+    
+    // SECURITY: Registration links can ONLY create shop admins, never cashiers
+    // Force role to 'admin' regardless of client input
+    const enforcedRole = 'admin';
 
-    // Validate GST rates if provided (only for admin role)
+    // Validate GST rates if provided (admin role is enforced)
     const validGstRates = ['0', '0.25', '3', '5', '12', '18', '28'];
     let processedGstRates = null;
     
-    if (gst_rates !== undefined && role === 'admin') {
+    if (gst_rates !== undefined) {
       if (!Array.isArray(gst_rates)) {
         return res.status(400).json({
           success: false,
@@ -109,9 +120,9 @@ router.post('/register', authLimiter, [
       processedGstRates = JSON.stringify(Array.from(ratesSet).sort((a, b) => parseFloat(a) - parseFloat(b)));
     }
 
-    // Validate registration token
+    // Validate registration token and shop status
     const [tokens] = await pool.execute(
-      `SELECT rt.*, s.shop_name 
+      `SELECT rt.*, s.shop_name, s.status, s.admin_user_id
        FROM registration_tokens rt
        JOIN shops s ON rt.shop_id = s.id
        WHERE rt.token = ?`,
@@ -139,41 +150,51 @@ router.post('/register', authLimiter, [
     if (tokenData.used_at) {
       return res.status(400).json({
         success: false,
-        message: 'This registration token has already been used.'
+        message: 'This shop is already activated. Registration link has been used.'
       });
     }
 
     const shop_id = tokenData.shop_id;
 
-    // Note: Email matching is not required - the token validates the shop
-    // The invitation email is just for delivery, not a strict requirement
-    // This allows shop owners to create additional users (cashiers) with different emails
+    // CRITICAL VALIDATION: Ensure shop is in DRAFT/pending state and has no admin
+    if (tokenData.status !== 'pending') {
+      return res.status(400).json({
+        success: false,
+        message: 'Shop setup already completed. This registration link is no longer valid.'
+      });
+    }
+
+    if (tokenData.admin_user_id !== null) {
+      return res.status(400).json({
+        success: false,
+        message: 'This shop is already activated. An admin user already exists for this shop.'
+      });
+    }
+
+
+    // Check if an admin user already exists for this shop (additional safety check)
+    const [existingAdmin] = await pool.execute(
+      'SELECT id FROM users WHERE shop_id = ? AND role = ?',
+      [shop_id, 'admin']
+    );
+
+    if (existingAdmin.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'This shop already has an admin user. Registration is no longer available.'
+      });
+    }
 
     // Check if username already exists in this shop
-    const [existingUser] = await pool.execute(
+    const [existingUsername] = await pool.execute(
       'SELECT id FROM users WHERE shop_id = ? AND username = ?',
       [shop_id, username]
     );
 
-    if (existingUser.length > 0) {
+    if (existingUsername.length > 0) {
       return res.status(400).json({
         success: false,
         message: 'Username already exists in this shop'
-      });
-    }
-
-    // Check if email + role combination already exists for this shop
-    // This allows the same email for different roles (e.g., admin@shop.com as "admin" and "cashier")
-    // but prevents duplicate email + role combinations
-    const [existingEmailRole] = await pool.execute(
-      'SELECT id, role FROM users WHERE shop_id = ? AND email = ? AND role = ?',
-      [shop_id, email, role]
-    );
-
-    if (existingEmailRole.length > 0) {
-      return res.status(400).json({
-        success: false,
-        message: `A ${role} user with this email already exists for this shop. Please use a different email or select a different role.`
       });
     }
 
@@ -181,40 +202,43 @@ router.post('/register', authLimiter, [
     await connection.beginTransaction();
 
     try {
-      // Hash password and create user
+      // Hash password and create admin user
       const passwordHash = await bcrypt.hash(password, 10);
-      await connection.execute(
+      const [userResult] = await connection.execute(
         `INSERT INTO users (shop_id, username, email, password_hash, role, full_name, phone, is_active) 
          VALUES (?, ?, ?, ?, ?, ?, ?, TRUE)`,
-        [shop_id, username, email, passwordHash, role, full_name, phone || null]
+        [shop_id, username, email, passwordHash, enforcedRole, full_name, phone || null]
       );
 
-      // If this is an admin user registering
-      if (role === 'admin') {
-        // Activate the shop if pending
+      const adminUserId = userResult.insertId;
+
+      // Activate the shop: update status to 'active' and set admin_user_id
+      await connection.execute(
+        `UPDATE shops 
+         SET status = 'active', 
+             admin_user_id = ?,
+             updated_at = NOW()
+         WHERE id = ? AND status = 'pending' AND admin_user_id IS NULL`,
+        [adminUserId, shop_id]
+      );
+      
+      // Update GST rates if provided
+      if (processedGstRates !== null) {
         await connection.execute(
-          `UPDATE shops SET status = 'active' WHERE id = ? AND status = 'pending'`,
-          [shop_id]
+          `UPDATE shops SET gst_rates = ? WHERE id = ?`,
+          [processedGstRates, shop_id]
         );
-        
-        // Update GST rates if provided
-        if (processedGstRates !== null) {
-          await connection.execute(
-            `UPDATE shops SET gst_rates = ? WHERE id = ?`,
-            [processedGstRates, shop_id]
-          );
-        }
-        
-        // Update GSTIN if provided
-        if (gstin && gstin.trim()) {
-          await connection.execute(
-            `UPDATE shops SET gstin = ? WHERE id = ?`,
-            [gstin.trim().toUpperCase(), shop_id]
-          );
-        }
+      }
+      
+      // Update GSTIN if provided
+      if (gstin && gstin.trim()) {
+        await connection.execute(
+          `UPDATE shops SET gstin = ? WHERE id = ?`,
+          [gstin.trim().toUpperCase(), shop_id]
+        );
       }
 
-      // Mark token as used
+      // Mark token as used (one-time use enforcement)
       await connection.execute(
         'UPDATE registration_tokens SET used_at = NOW() WHERE id = ?',
         [tokenData.id]

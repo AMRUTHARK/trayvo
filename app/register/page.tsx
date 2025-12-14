@@ -26,7 +26,6 @@ function RegisterForm() {
     username: '',
     password: '',
     confirmPassword: '',
-    role: 'cashier',
     gstin: '',
   });
   const [selectedGstRates, setSelectedGstRates] = useState<string[]>(['0']); // Default: 0% selected
@@ -93,10 +92,9 @@ function RegisterForm() {
     setLoading(true);
 
     try {
-      // Ensure 0% is always included in GST rates if admin
-      const gstRatesToSubmit = formData.role === 'admin' 
-        ? Array.from(new Set([...selectedGstRates, '0']))
-        : undefined;
+      // Registration creates shop admin - GST rates selection is for admin
+      // Ensure 0% is always included in GST rates
+      const gstRatesToSubmit = Array.from(new Set([...selectedGstRates, '0']));
 
       const response = await api.post('/auth/register', {
         registration_token: formData.registration_token,
@@ -105,9 +103,9 @@ function RegisterForm() {
         phone: formData.phone || null,
         username: formData.username,
         password: formData.password,
-        role: formData.role,
+        role: 'admin', // Always admin for registration links
         ...(gstRatesToSubmit && { gst_rates: gstRatesToSubmit }),
-        ...(formData.role === 'admin' && formData.gstin && { gstin: formData.gstin.trim() }),
+        ...(formData.gstin && { gstin: formData.gstin.trim() }),
       });
 
       if (response.data.success) {
@@ -241,21 +239,8 @@ function RegisterForm() {
               />
             </div>
 
-            <div>
-              <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-2">
-                Role *
-              </label>
-              <select
-                id="role"
-                required
-                value={formData.role}
-                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
-              >
-                <option value="cashier">Cashier</option>
-                <option value="admin">Admin</option>
-              </select>
-            </div>
+            {/* Role is fixed to 'admin' for registration links - removed UI selection */}
+            <input type="hidden" name="role" value="admin" />
 
             <div>
               <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
@@ -304,9 +289,8 @@ function RegisterForm() {
             </div>
           </div>
 
-          {/* Shop Details - Only for Admin */}
-          {formData.role === 'admin' && (
-            <div className="border-t pt-6 space-y-6">
+          {/* Shop Details - Registration links create shop admin */}
+          <div className="border-t pt-6 space-y-6">
               {/* GSTIN Field */}
               <div>
                 <label htmlFor="gstin" className="block text-sm font-medium text-gray-700 mb-2">
@@ -372,8 +356,7 @@ function RegisterForm() {
                   })}
                 </div>
               </div>
-            </div>
-          )}
+          </div>
 
           <button
             type="submit"

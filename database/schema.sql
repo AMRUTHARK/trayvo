@@ -12,9 +12,16 @@ CREATE TABLE IF NOT EXISTS shops (
   logo_url TEXT,
   printer_type ENUM('58mm', '80mm') DEFAULT '58mm',
   printer_config JSON,
+  status ENUM('pending', 'active') DEFAULT 'active',
+  suggested_username VARCHAR(100),
+  admin_user_id INT NULL,
+  gst_rates JSON,
+  is_active BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_email (email)
+  INDEX idx_email (email),
+  INDEX idx_shop_admin_user_id (admin_user_id),
+  FOREIGN KEY (admin_user_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Users table (Admin, Cashier, and Super Admin)

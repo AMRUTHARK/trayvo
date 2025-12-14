@@ -155,12 +155,13 @@ router.get('/users', authorize('admin'), async (req, res, next) => {
   }
 });
 
-// Create new user (admin only)
+// Create new user (shop admin only) - ONLY for creating cashiers
+// Shop admins cannot create other admins - only superadmin can via registration links
 router.post('/users', authorize('admin'), [
   body('username').trim().isLength({ min: 3 }).withMessage('Username must be at least 3 characters'),
   body('email').isEmail().withMessage('Valid email is required'),
   body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
-  body('role').isIn(['admin', 'cashier']).withMessage('Role must be admin or cashier'),
+  body('role').isIn(['cashier']).withMessage('Only cashier role can be created. Admin users must be created via registration links.'),
   body('full_name').optional().trim(),
   body('phone').optional().trim()
 ], async (req, res, next) => {
@@ -175,6 +176,10 @@ router.post('/users', authorize('admin'), [
     }
 
     const { username, email, password, role, full_name, phone } = req.body;
+    
+    // SECURITY: Enforce that only cashiers can be created via this endpoint
+    // Shop admins cannot create other admins
+    const enforcedRole = 'cashier';
 
     // Check if username already exists
     const [existing] = await pool.execute(
@@ -195,7 +200,7 @@ router.post('/users', authorize('admin'), [
     const [result] = await pool.execute(
       `INSERT INTO users (shop_id, username, email, password_hash, role, full_name, phone, is_active) 
        VALUES (?, ?, ?, ?, ?, ?, ?, TRUE)`,
-      [req.shopId, username, email, passwordHash, role, full_name || null, phone || null]
+      [req.shopId, username, email, passwordHash, enforcedRole, full_name || null, phone || null]
     );
 
     res.status(201).json({

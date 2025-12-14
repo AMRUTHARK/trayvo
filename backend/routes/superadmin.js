@@ -186,44 +186,28 @@ router.post('/shops', [
         });
       }
 
-      // Determine shop status: 'pending' if invite-only (no username/password), 'active' otherwise
-      const shopStatus = (sendInvitation && (!username || !password)) ? 'pending' : 'active';
+      // NEW ARCHITECTURE: When sendInvitation=true, shop is created as DRAFT (pending) with no admin user
+      // Admin user will be created only via registration link
+      // When sendInvitation=false, we still create as 'pending' if no username/password provided
+      // But we NEVER create admin user here - it must be created via registration
+      
+      // Always create shop as 'pending' (DRAFT) when sending invitation
+      // This ensures clean separation: superadmin creates draft, admin activates via registration
+      const shopStatus = sendInvitation ? 'pending' : ((username && password) ? 'active' : 'pending');
       const suggestedUsernameValue = suggested_username || username || null;
 
-      // Create shop with status and suggested_username
+      // Create shop with status='pending' (DRAFT) and admin_user_id=NULL initially
       const [shopResult] = await connection.execute(
-        `INSERT INTO shops (shop_name, owner_name, email, phone, address, gstin, logo_url, status, suggested_username) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO shops (shop_name, owner_name, email, phone, address, gstin, logo_url, status, suggested_username, admin_user_id) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
         [shop_name, owner_name, email, phone || null, address || null, gstin || null, logo_url || null, shopStatus, suggestedUsernameValue]
       );
 
       const shopId = shopResult.insertId;
 
-      // Only create admin user if both username and password are provided
-      if (username && password) {
-        // Check if username already exists
-        const [existingUser] = await connection.execute(
-          'SELECT id FROM users WHERE shop_id = ? AND username = ?',
-          [shopId, username]
-        );
-
-        if (existingUser.length > 0) {
-          await connection.rollback();
-          connection.release();
-          return res.status(400).json({
-            success: false,
-            message: 'Username already exists'
-          });
-        }
-
-        // Hash password and create admin user
-        const passwordHash = await bcrypt.hash(password, 10);
-        await connection.execute(
-          `INSERT INTO users (shop_id, username, email, password_hash, role, full_name, is_active) 
-           VALUES (?, ?, ?, ?, 'admin', ?, TRUE)`,
-          [shopId, username, email, passwordHash, owner_name]
-        );
-      }
+      // CRITICAL: Never create admin user during shop creation
+      // Admin users can ONLY be created via registration links
+      // This prevents duplication and ensures proper onboarding flow
 
       await connection.commit();
       connection.release();
@@ -596,6 +580,10 @@ router.post('/shops/:id/users', [
 
     const shopId = parseInt(req.params.id);
     const { username, email, password, role, full_name, phone } = req.body;
+    
+    // SECURITY: Superadmin can create cashiers for shops, but admin creation is via registration only
+    // Enforce cashier role - admins must be created via registration links
+    const enforcedRole = 'cashier';
 
     // Check if shop exists
     const [shops] = await pool.execute('SELECT id FROM shops WHERE id = ?', [shopId]);
@@ -619,17 +607,16 @@ router.post('/shops/:id/users', [
       });
     }
 
-    // Check if email + role combination already exists for this shop
-    // This allows the same email for different roles but prevents duplicate email + role combinations
+    // Check if email + role combination already exists for this shop (for cashiers)
     const [existingEmailRole] = await pool.execute(
       'SELECT id, role FROM users WHERE shop_id = ? AND email = ? AND role = ?',
-      [shopId, email, role]
+      [shopId, email, enforcedRole]
     );
 
     if (existingEmailRole.length > 0) {
       return res.status(400).json({
         success: false,
-        message: `A ${role} user with this email already exists for this shop. Please use a different email or select a different role.`
+        message: `A cashier with this email already exists for this shop. Please use a different email.`
       });
     }
 
@@ -637,7 +624,7 @@ router.post('/shops/:id/users', [
     const [result] = await pool.execute(
       `INSERT INTO users (shop_id, username, email, password_hash, role, full_name, phone, is_active)
        VALUES (?, ?, ?, ?, ?, ?, ?, TRUE)`,
-      [shopId, username, email, passwordHash, role, full_name || null, phone || null]
+      [shopId, username, email, passwordHash, enforcedRole, full_name || null, phone || null]
     );
 
     res.status(201).json({
