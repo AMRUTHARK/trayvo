@@ -4,9 +4,25 @@ import { useState, useEffect } from 'react';
 import Layout from '@/components/Layout';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
-import { getStoredUser, isSuperAdmin } from '@/lib/auth';
+import { getStoredUser, isSuperAdmin, isCashier } from '@/lib/auth';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 
 export default function InventoryPage() {
+  const router = useRouter();
+  
+  // Route guard: Cashiers cannot access inventory
+  useEffect(() => {
+    if (isCashier()) {
+      router.push('/pos');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Show nothing while redirecting
+  if (isCashier()) {
+    return null;
+  }
   const [ledger, setLedger] = useState<any[]>([]);
   const [lowStock, setLowStock] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);

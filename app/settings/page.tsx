@@ -4,11 +4,13 @@ import { useState, useEffect } from 'react';
 import Layout from '@/components/Layout';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
-import { isAdmin, getStoredUser } from '@/lib/auth';
+import { isAdmin, getStoredUser, isCashier } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
 
 export default function SettingsPage() {
   const router = useRouter();
+  const currentUser = getStoredUser();
+  const isCashierUser = isCashier();
   const [shop, setShop] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -24,14 +26,43 @@ export default function SettingsPage() {
     logo_url: '',
   });
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  // For cashiers: only allow editing own username/password
+  const [profileForm, setProfileForm] = useState({
+    username: '',
+    password: '',
+    confirmPassword: '',
+    current_password: '',
+  });
 
   useEffect(() => {
-    if (!isAdmin()) {
+    if (isCashierUser) {
+      // Cashiers can access settings but only to edit their own profile
+      fetchUserProfile();
+    } else if (!isAdmin()) {
       router.push('/dashboard');
       return;
+    } else {
+      fetchData();
     }
-    fetchData();
-  }, [router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const fetchUserProfile = async () => {
+    try {
+      const response = await api.get('/auth/me');
+      const userData = response.data.data;
+      setProfileForm({
+        username: userData.username || '',
+        password: '',
+        confirmPassword: '',
+        current_password: '',
+      });
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to fetch profile');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -65,6 +96,50 @@ export default function SettingsPage() {
       setUsers([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleProfileUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (profileForm.password && profileForm.password !== profileForm.confirmPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
+
+    if (profileForm.password && !profileForm.current_password) {
+      toast.error('Current password is required to change password');
+      return;
+    }
+
+    try {
+      const payload: any = {};
+      if (profileForm.username && profileForm.username !== currentUser?.username) {
+        payload.username = profileForm.username;
+      }
+      if (profileForm.password) {
+        payload.password = profileForm.password;
+        payload.current_password = profileForm.current_password;
+      }
+
+      await api.put('/auth/profile', payload);
+      toast.success('Profile updated successfully');
+      
+      // Update local storage if username changed
+      if (payload.username) {
+        const updatedUser = { ...currentUser, username: payload.username };
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+      }
+      
+      // Reset password fields
+      setProfileForm({
+        ...profileForm,
+        password: '',
+        confirmPassword: '',
+        current_password: '',
+      });
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to update profile');
     }
   };
 
@@ -106,6 +181,81 @@ export default function SettingsPage() {
     return (
       <Layout>
         <div className="text-center text-gray-500">Loading...</div>
+      </Layout>
+    );
+  }
+
+  // Cashier view: only show profile edit form
+  if (isCashierUser) {
+    return (
+      <Layout>
+        <div className="space-y-6">
+          <h1 className="text-3xl font-bold text-gray-800">Settings</h1>
+          
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">My Profile</h2>
+            <p className="text-sm text-gray-600 mb-4">Update your username and password</p>
+            
+            <form onSubmit={handleProfileUpdate} className="space-y-4 max-w-md">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                <input
+                  type="text"
+                  value={profileForm.username}
+                  onChange={(e) => setProfileForm({ ...profileForm, username: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
+                  minLength={3}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">New Password (optional)</label>
+                <input
+                  type="password"
+                  value={profileForm.password}
+                  onChange={(e) => setProfileForm({ ...profileForm, password: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
+                  minLength={6}
+                  placeholder="Leave empty to keep current password"
+                />
+              </div>
+              
+              {profileForm.password && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
+                    <input
+                      type="password"
+                      value={profileForm.confirmPassword}
+                      onChange={(e) => setProfileForm({ ...profileForm, confirmPassword: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
+                      minLength={6}
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Current Password *</label>
+                    <input
+                      type="password"
+                      value={profileForm.current_password}
+                      onChange={(e) => setProfileForm({ ...profileForm, current_password: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
+                      required
+                      placeholder="Required to change password"
+                    />
+                  </div>
+                </>
+              )}
+              
+              <button
+                type="submit"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Update Profile
+              </button>
+            </form>
+          </div>
+        </div>
       </Layout>
     );
   }

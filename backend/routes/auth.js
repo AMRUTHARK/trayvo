@@ -530,5 +530,107 @@ router.post('/change-password', authenticate, [
   }
 });
 
+// Update own profile (username and/or password) - any authenticated user
+router.put('/profile', authenticate, [
+  body('username').optional().trim().isLength({ min: 3 }).withMessage('Username must be at least 3 characters'),
+  body('password').optional().isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  body('current_password').optional().notEmpty().withMessage('Current password is required when changing password')
+], async (req, res, next) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { username, password, current_password } = req.body;
+    const userId = req.user.id;
+
+    // Verify user exists
+    const [users] = await pool.execute(
+      'SELECT id, username, password_hash, shop_id FROM users WHERE id = ?',
+      [userId]
+    );
+
+    if (!users.length) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const user = users[0];
+    const updateFields = [];
+    const updateValues = [];
+
+    // Update username if provided
+    if (username && username !== user.username) {
+      // Check if username already exists in the same shop
+      const [existing] = await pool.execute(
+        'SELECT id FROM users WHERE shop_id = ? AND username = ? AND id != ?',
+        [user.shop_id, username, userId]
+      );
+
+      if (existing.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Username already exists in this shop'
+        });
+      }
+
+      updateFields.push('username = ?');
+      updateValues.push(username);
+    }
+
+    // Update password if provided
+    if (password) {
+      if (!current_password) {
+        return res.status(400).json({
+          success: false,
+          message: 'Current password is required to change password'
+        });
+      }
+
+      // Verify current password
+      const isValidPassword = await bcrypt.compare(current_password, user.password_hash);
+      if (!isValidPassword) {
+        return res.status(401).json({
+          success: false,
+          message: 'Current password is incorrect'
+        });
+      }
+
+      // Hash new password
+      const passwordHash = await bcrypt.hash(password, 10);
+      updateFields.push('password_hash = ?');
+      updateValues.push(passwordHash);
+    }
+
+    if (updateFields.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No fields to update'
+      });
+    }
+
+    updateValues.push(userId);
+
+    await pool.execute(
+      `UPDATE users SET ${updateFields.join(', ')}, updated_at = NOW() WHERE id = ?`,
+      updateValues
+    );
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;
 

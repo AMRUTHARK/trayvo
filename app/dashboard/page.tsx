@@ -15,7 +15,9 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
-import { getStoredUser, isSuperAdmin } from '@/lib/auth';
+import { getStoredUser, isSuperAdmin, isCashier } from '@/lib/auth';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 
 ChartJS.register(
   CategoryScale,
@@ -29,6 +31,20 @@ ChartJS.register(
 );
 
 export default function DashboardPage() {
+  const router = useRouter();
+  
+  // Route guard: Cashiers cannot access dashboard
+  useEffect(() => {
+    if (isCashier()) {
+      router.push('/pos');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Show nothing while redirecting
+  if (isCashier()) {
+    return null;
+  }
   const [stats, setStats] = useState<any>(null);
   const [revenueData, setRevenueData] = useState<any>(null);
   const [categoryData, setCategoryData] = useState<any>(null);

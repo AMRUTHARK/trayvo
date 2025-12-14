@@ -7,9 +7,25 @@ import toast from 'react-hot-toast';
 import { format, subDays } from 'date-fns';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
-import { getStoredUser, isSuperAdmin } from '@/lib/auth';
+import { getStoredUser, isSuperAdmin, isCashier } from '@/lib/auth';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 
 export default function ReportsPage() {
+  const router = useRouter();
+  
+  // Route guard: Cashiers cannot access reports
+  useEffect(() => {
+    if (isCashier()) {
+      router.push('/pos');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Show nothing while redirecting
+  if (isCashier()) {
+    return null;
+  }
   const [reportType, setReportType] = useState<'sales' | 'gst' | 'profit' | 'category' | 'payment'>('sales');
   const [startDate, setStartDate] = useState(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
