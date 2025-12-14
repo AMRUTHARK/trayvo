@@ -17,7 +17,6 @@ import {
 } from 'chart.js';
 import { getStoredUser, isSuperAdmin, isCashier } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
 
 ChartJS.register(
   CategoryScale,

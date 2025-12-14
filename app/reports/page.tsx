@@ -9,7 +9,6 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { getStoredUser, isSuperAdmin, isCashier } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
 
 export default function ReportsPage() {
   const router = useRouter();

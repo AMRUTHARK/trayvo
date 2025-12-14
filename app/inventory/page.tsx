@@ -6,7 +6,6 @@ import api from '@/lib/api';
 import toast from 'react-hot-toast';
 import { getStoredUser, isSuperAdmin, isCashier } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
 
 export default function InventoryPage() {
   const router = useRouter();
