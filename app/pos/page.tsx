@@ -314,6 +314,9 @@ export default function POSPage() {
     setLoading(true);
     try {
       const { subtotal, billDiscount, totalGst, total } = calculateTotals();
+      
+      // Calculate discount percent for API call
+      const discountPercentNum = safeParseFloat(String(discountPercent), 0);
 
       const response = await api.post('/bills', {
         customer_name: customerName || null,
