@@ -513,7 +513,13 @@ export default function ProductsPage() {
                       <tr key={product.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="font-medium text-gray-900">{product.name}</div>
-                          {parseFloat(product.stock_quantity) < parseFloat(product.min_stock_level || 0) && (
+                          {(() => {
+                            const stockQty = parseFloat(product.stock_quantity) || 0;
+                            const minStock = parseFloat(product.min_stock_level);
+                            // Only show low stock if min_stock_level is set (not null/undefined/0/NaN) and stock is below it
+                            if (isNaN(minStock) || minStock <= 0) return false;
+                            return stockQty < minStock;
+                          })() && (
                             <span className="text-xs text-red-600">Low Stock</span>
                           )}
                         </td>
