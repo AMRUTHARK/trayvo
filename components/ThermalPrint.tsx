@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
-import { formatCurrency, formatQuantity, formatNumber } from '@/lib/format';
+import { formatCurrency, formatQuantity, formatNumber, formatPercentage } from '@/lib/format';
 
 interface ThermalPrintProps {
   bill: any;
