@@ -6,6 +6,7 @@ import api from '@/lib/api';
 import toast from 'react-hot-toast';
 import { isAdmin, getStoredUser, isCashier } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
+import PasswordInput from '@/components/PasswordInput';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -15,6 +16,15 @@ export default function SettingsPage() {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingUserId, setDeletingUserId] = useState<number | null>(null);
+  const [showCreateCashier, setShowCreateCashier] = useState(false);
+  const [creatingCashier, setCreatingCashier] = useState(false);
+  const [cashierForm, setCashierForm] = useState({
+    username: '',
+    email: '',
+    password: '',
+    full_name: '',
+    phone: '',
+  });
   const [formData, setFormData] = useState({
     shop_name: '',
     owner_name: '',
@@ -174,6 +184,31 @@ export default function SettingsPage() {
       fetchData();
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Update failed');
+    }
+  };
+
+  const handleCreateCashier = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreatingCashier(true);
+    try {
+      await api.post('/shops/users', {
+        ...cashierForm,
+        role: 'cashier', // Always cashier - enforced by backend
+      });
+      toast.success('Cashier created successfully');
+      setCashierForm({
+        username: '',
+        email: '',
+        password: '',
+        full_name: '',
+        phone: '',
+      });
+      setShowCreateCashier(false);
+      fetchData(); // Refresh users list
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to create cashier');
+    } finally {
+      setCreatingCashier(false);
     }
   };
 
@@ -399,29 +434,167 @@ export default function SettingsPage() {
 
         {/* Users Management */}
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">Users</h2>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold text-gray-800">Users</h2>
+            {!showCreateCashier && (
+              <button
+                onClick={() => setShowCreateCashier(true)}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+              >
+                + Create Cashier
+              </button>
+            )}
+          </div>
+
+          {/* Create Cashier Form */}
+          {showCreateCashier && (
+            <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Create New Cashier</h3>
+                <button
+                  onClick={() => {
+                    setShowCreateCashier(false);
+                    setCashierForm({
+                      username: '',
+                      email: '',
+                      password: '',
+                      full_name: '',
+                      phone: '',
+                    });
+                  }}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  ✕
+                </button>
+              </div>
+              <form onSubmit={handleCreateCashier} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Username *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      minLength={3}
+                      value={cashierForm.username}
+                      onChange={(e) => setCashierForm({ ...cashierForm, username: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
+                      placeholder="Enter username"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Email *
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={cashierForm.email}
+                      onChange={(e) => setCashierForm({ ...cashierForm, email: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
+                      placeholder="Enter email"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Password *
+                    </label>
+                    <PasswordInput
+                      required
+                      minLength={6}
+                      value={cashierForm.password}
+                      onChange={(e) => setCashierForm({ ...cashierForm, password: e.target.value })}
+                      placeholder="Minimum 6 characters"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Full Name
+                    </label>
+                    <input
+                      type="text"
+                      value={cashierForm.full_name}
+                      onChange={(e) => setCashierForm({ ...cashierForm, full_name: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
+                      placeholder="Optional"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Phone
+                    </label>
+                    <input
+                      type="tel"
+                      value={cashierForm.phone}
+                      onChange={(e) => setCashierForm({ ...cashierForm, phone: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
+                      placeholder="Optional"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    type="submit"
+                    disabled={creatingCashier}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {creatingCashier ? 'Creating...' : 'Create Cashier'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCreateCashier(false);
+                      setCashierForm({
+                        username: '',
+                        email: '',
+                        password: '',
+                        full_name: '',
+                        phone: '',
+                      });
+                    }}
+                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Username</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Full Name</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {users.map((user) => (
-                  <tr key={user.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">{user.username}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">{user.email}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs">
-                        {user.role}
-                      </span>
+                {users.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                      No users found
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                  </tr>
+                ) : (
+                  users.map((user) => (
+                    <tr key={user.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">{user.username}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">{user.email}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">{user.full_name || '-'}</td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 py-1 rounded text-xs ${
+                          user.role === 'admin' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {user.role}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
                       <span
                         className={`px-2 py-1 rounded text-xs ${
                           user.is_active
