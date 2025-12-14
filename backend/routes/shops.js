@@ -70,7 +70,7 @@ router.put('/', authorize('admin'), [
       });
     }
 
-    const { shop_name, owner_name, email, phone, address, gstin, printer_type, printer_config, logo_url } = req.body;
+    const { shop_name, owner_name, email, phone, address, gstin, printer_type, printer_config, logo_url, gst_rates } = req.body;
 
     const updateFields = [];
     const updateValues = [];
@@ -110,6 +110,37 @@ router.put('/', authorize('admin'), [
     if (logo_url !== undefined) {
       updateFields.push('logo_url = ?');
       updateValues.push(logo_url || null);
+    }
+    if (gst_rates !== undefined) {
+      // Validate GST rates
+      const validGstRates = ['0', '0.25', '3', '5', '12', '18', '28'];
+      if (Array.isArray(gst_rates)) {
+        // Ensure "0" is always included
+        const ratesSet = new Set(gst_rates.map(r => String(r)));
+        ratesSet.add('0');
+        const processedRates = Array.from(ratesSet).sort((a, b) => parseFloat(a) - parseFloat(b));
+        
+        // Validate all rates are valid
+        const invalidRates = processedRates.filter(rate => !validGstRates.includes(String(rate)));
+        if (invalidRates.length > 0) {
+          return res.status(400).json({
+            success: false,
+            message: `Invalid GST rates: ${invalidRates.join(', ')}. Valid rates are: ${validGstRates.join(', ')}`
+          });
+        }
+        
+        updateFields.push('gst_rates = ?');
+        updateValues.push(JSON.stringify(processedRates));
+      } else if (gst_rates === null) {
+        // Allow setting to null (all rates available)
+        updateFields.push('gst_rates = ?');
+        updateValues.push(null);
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: 'GST rates must be an array or null'
+        });
+      }
     }
 
     if (updateFields.length === 0) {

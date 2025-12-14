@@ -36,6 +36,16 @@ export default function SettingsPage() {
     printer_type: '58mm',
     logo_url: '',
   });
+  const [selectedGstRates, setSelectedGstRates] = useState<string[]>(['0']);
+  const availableGstRates = [
+    { value: '0', label: '0% (Nil)' },
+    { value: '0.25', label: '0.25% (Rough Diamonds)' },
+    { value: '3', label: '3% (Gold, Silver, etc.)' },
+    { value: '5', label: '5% (Essential Goods)' },
+    { value: '12', label: '12% (Standard Rate)' },
+    { value: '18', label: '18% (Standard Rate)' },
+    { value: '28', label: '28% (Luxury Goods)' },
+  ];
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   // For cashiers and superadmins: only allow editing own username/password
   const [profileForm, setProfileForm] = useState({
@@ -94,6 +104,16 @@ export default function SettingsPage() {
         logo_url: shopRes.data.data.logo_url || '',
       });
       setLogoPreview(shopRes.data.data.logo_url || null);
+      
+      // Set GST rates from shop data (ensure 0% is always included)
+      const shopGstRates = shopRes.data.data.gst_rates;
+      if (shopGstRates && Array.isArray(shopGstRates) && shopGstRates.length > 0) {
+        const ratesSet = new Set(shopGstRates.map((r: any) => String(r)));
+        ratesSet.add('0'); // Ensure 0% is always included
+        setSelectedGstRates(Array.from(ratesSet).sort((a, b) => parseFloat(a) - parseFloat(b)));
+      } else {
+        setSelectedGstRates(['0']); // Default to just 0% if no rates set
+      }
     } catch (error: any) {
       // Only show error for actual failures (network/server errors)
       // Settings page should show error because shop data is required
@@ -180,7 +200,12 @@ export default function SettingsPage() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.put('/shops', formData);
+      // Ensure 0% is always included in GST rates
+      const gstRatesToSubmit = Array.from(new Set([...selectedGstRates, '0']));
+      await api.put('/shops', {
+        ...formData,
+        gst_rates: gstRatesToSubmit,
+      });
       toast.success('Settings updated successfully');
       fetchData();
     } catch (error: any) {
@@ -432,6 +457,63 @@ export default function SettingsPage() {
               Save Changes
             </button>
           </form>
+        </div>
+
+        {/* GST Rates Management */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-4">GST Rates Configuration</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Select the GST rates your shop will use. These rates will be available when creating products.
+            <strong className="text-gray-900"> 0% GST is always included and cannot be removed.</strong>
+          </p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            {availableGstRates.map((rate) => {
+              const isSelected = selectedGstRates.includes(rate.value);
+              const isZeroRate = rate.value === '0';
+              
+              return (
+                <label
+                  key={rate.value}
+                  className={`flex items-center p-3 border rounded-lg cursor-pointer transition-colors ${
+                    isSelected || isZeroRate
+                      ? 'bg-blue-50 border-blue-500 text-blue-700'
+                      : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                  } ${isZeroRate ? 'opacity-75' : ''}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isSelected || isZeroRate}
+                    disabled={isZeroRate}
+                    onChange={(e) => {
+                      if (isZeroRate) return; // 0% is always included
+                      if (e.target.checked) {
+                        setSelectedGstRates([...selectedGstRates, rate.value]);
+                      } else {
+                        setSelectedGstRates(selectedGstRates.filter(r => r !== rate.value));
+                      }
+                    }}
+                    className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <span className="text-sm font-medium">{rate.label}</span>
+                </label>
+              );
+            })}
+          </div>
+          <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+            <p className="text-sm text-gray-700">
+              <strong>Selected Rates:</strong>{' '}
+              {Array.from(new Set([...selectedGstRates, '0']))
+                .sort((a, b) => parseFloat(a) - parseFloat(b))
+                .map(r => `${r}%`)
+                .join(', ')}
+            </p>
+          </div>
+          <button
+            onClick={handleSave}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Save GST Rates
+          </button>
         </div>
 
         {/* Users Management */}
