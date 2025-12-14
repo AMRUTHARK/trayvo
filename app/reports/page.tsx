@@ -35,12 +35,16 @@ export default function ReportsPage() {
   const fetchShops = async () => {
     try {
       const response = await api.get('/superadmin/shops');
-      setShops(response.data.data);
-      if (response.data.data.length > 0) {
+      setShops(response.data.data || []);
+      if (response.data.data && response.data.data.length > 0) {
         setSelectedShopId(response.data.data[0].id);
       }
-    } catch (error) {
-      toast.error('Failed to fetch shops');
+    } catch (error: any) {
+      // Only show error for actual failures (network/server errors)
+      if (error.response?.status >= 500 || error.request) {
+        toast.error('Failed to fetch shops. Please try again.');
+      }
+      setShops([]);
     }
   };
 
@@ -52,9 +56,13 @@ export default function ReportsPage() {
         params.shop_id = selectedShopId;
       }
       const response = await api.get(`/reports/${reportType}`, { params });
-      setData(response.data.data);
-    } catch (error) {
-      toast.error('Failed to fetch report');
+      setData(response.data.data || []);
+    } catch (error: any) {
+      // Only show error for actual failures (network/server errors)
+      if (error.response?.status >= 500 || error.request) {
+        toast.error('Failed to fetch report. Please try again.');
+      }
+      setData([]);
     } finally {
       setLoading(false);
     }

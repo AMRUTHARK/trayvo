@@ -22,9 +22,17 @@ export default function BillDetailPage() {
     try {
       const response = await api.get(`/bills/${params.id}`);
       setBill(response.data.data);
-    } catch (error) {
-      toast.error('Failed to fetch bill');
-      router.push('/bills');
+    } catch (error: any) {
+      // Bill detail page - if bill not found, redirect is appropriate
+      if (error.response?.status === 404) {
+        toast.error('Bill not found');
+        router.push('/bills');
+      } else if (error.response?.status >= 500 || error.request) {
+        toast.error('Failed to fetch bill. Please try again.');
+      } else {
+        toast.error(error.response?.data?.message || 'Failed to fetch bill');
+        router.push('/bills');
+      }
     } finally {
       setLoading(false);
     }

@@ -34,12 +34,16 @@ export default function BillsPage() {
   const fetchShops = async () => {
     try {
       const response = await api.get('/superadmin/shops');
-      setShops(response.data.data);
-      if (response.data.data.length > 0) {
+      setShops(response.data.data || []);
+      if (response.data.data && response.data.data.length > 0) {
         setSelectedShopId(response.data.data[0].id);
       }
-    } catch (error) {
-      toast.error('Failed to fetch shops');
+    } catch (error: any) {
+      // Only show error for actual failures (network/server errors)
+      if (error.response?.status >= 500 || error.request) {
+        toast.error('Failed to fetch shops. Please try again.');
+      }
+      setShops([]);
     }
   };
 
@@ -51,9 +55,13 @@ export default function BillsPage() {
         params.shop_id = selectedShopId;
       }
       const response = await api.get('/bills', { params });
-      setBills(response.data.data);
-    } catch (error) {
-      toast.error('Failed to fetch bills');
+      setBills(response.data.data || []);
+    } catch (error: any) {
+      // Only show error for actual failures (network/server errors)
+      if (error.response?.status >= 500 || error.request) {
+        toast.error('Failed to fetch bills. Please try again.');
+      }
+      setBills([]);
     } finally {
       setLoading(false);
     }
@@ -138,52 +146,60 @@ export default function BillsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {bills.map((bill) => (
-                    <tr key={bill.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{bill.bill_number}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {format(new Date(bill.created_at), 'dd MMM yyyy HH:mm')}
+                  {bills.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                        No bills found
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {bill.customer_name || 'Walk-in'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-                        ₹{parseFloat(bill.total_amount || 0).toFixed(2)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs">
-                          {bill.payment_mode === 'upi' ? 'UPI' : bill.payment_mode.toUpperCase()}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <span
-                          className={`px-2 py-1 rounded text-xs ${
-                            bill.status === 'completed'
-                              ? 'bg-green-100 text-green-800'
-                              : bill.status === 'cancelled'
-                              ? 'bg-red-100 text-red-800'
-                              : 'bg-yellow-100 text-yellow-800'
-                          }`}
-                        >
-                          {bill.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <button
-                          onClick={() => router.push(`/bills/${bill.id}`)}
-                          className="text-blue-600 hover:text-blue-700 mr-3"
-                        >
-                          View
-                        </button>
-                        <button
-                          onClick={() => handlePrint(bill)}
+                    </tr>
+                  ) : (
+                    bills.map((bill) => (
+                      <tr key={bill.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{bill.bill_number}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {format(new Date(bill.created_at), 'dd MMM yyyy HH:mm')}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {bill.customer_name || 'Walk-in'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
+                          ₹{parseFloat(bill.total_amount || 0).toFixed(2)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs">
+                            {bill.payment_mode === 'upi' ? 'UPI' : bill.payment_mode.toUpperCase()}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <span
+                            className={`px-2 py-1 rounded text-xs ${
+                              bill.status === 'completed'
+                                ? 'bg-green-100 text-green-800'
+                                : bill.status === 'cancelled'
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-yellow-100 text-yellow-800'
+                            }`}
+                          >
+                            {bill.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <button
+                            onClick={() => router.push(`/bills/${bill.id}`)}
+                            className="text-blue-600 hover:text-blue-700 mr-3"
+                          >
+                            View
+                          </button>
+                          <button
+                            onClick={() => handlePrint(bill)}
                           className="text-green-600 hover:text-green-700"
                         >
                           Print
                         </button>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>

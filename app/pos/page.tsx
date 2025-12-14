@@ -58,10 +58,14 @@ export default function POSPage() {
   const fetchHoldBills = async () => {
     try {
       const response = await api.get('/hold-bills');
-      setHoldBills(response.data.data);
-    } catch (error) {
-      console.error('Failed to fetch hold bills:', error);
-      toast.error('Failed to load held bills');
+      setHoldBills(response.data.data || []);
+    } catch (error: any) {
+      // Only show error for actual failures (network/server errors)
+      if (error.response?.status >= 500 || error.request) {
+        console.error('Failed to fetch hold bills:', error);
+        toast.error('Failed to load held bills. Please try again.');
+      }
+      setHoldBills([]);
     }
   };
 

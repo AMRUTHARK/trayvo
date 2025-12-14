@@ -40,7 +40,7 @@ export default function SettingsPage() {
         api.get('/shops/users'),
       ]);
       setShop(shopRes.data.data);
-      setUsers(usersRes.data.data);
+      setUsers(usersRes.data.data || []);
       setFormData({
         shop_name: shopRes.data.data.shop_name || '',
         owner_name: shopRes.data.data.owner_name || '',
@@ -52,8 +52,17 @@ export default function SettingsPage() {
         logo_url: shopRes.data.data.logo_url || '',
       });
       setLogoPreview(shopRes.data.data.logo_url || null);
-    } catch (error) {
-      toast.error('Failed to fetch settings');
+    } catch (error: any) {
+      // Only show error for actual failures (network/server errors)
+      // Settings page should show error because shop data is required
+      if (error.response?.status >= 500 || error.request) {
+        toast.error('Failed to fetch settings. Please try again.');
+      } else if (error.response?.status === 404) {
+        toast.error('Shop not found');
+      } else {
+        toast.error(error.response?.data?.message || 'Failed to fetch settings');
+      }
+      setUsers([]);
     } finally {
       setLoading(false);
     }

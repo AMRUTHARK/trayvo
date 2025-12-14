@@ -61,9 +61,13 @@ export default function SuperAdminPage() {
         ? '/superadmin/shops' 
         : `/superadmin/shops?status=${filterStatus}`;
       const response = await api.get(url);
-      setShops(response.data.data);
+      setShops(response.data.data || []);
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to fetch shops');
+      // Only show error for actual failures (network/server errors)
+      if (error.response?.status >= 500 || error.request) {
+        toast.error(error.response?.data?.message || 'Failed to fetch shops. Please try again.');
+      }
+      setShops([]);
     } finally {
       setLoading(false);
     }
@@ -72,9 +76,13 @@ export default function SuperAdminPage() {
   const fetchShopUsers = async (shopId: number) => {
     try {
       const response = await api.get(`/superadmin/shops/${shopId}/users`);
-      setShopUsers(response.data.data);
+      setShopUsers(response.data.data || []);
     } catch (error: any) {
-      toast.error('Failed to fetch shop users');
+      // Only show error for actual failures (network/server errors)
+      if (error.response?.status >= 500 || error.request) {
+        toast.error('Failed to fetch shop users. Please try again.');
+      }
+      setShopUsers([]);
     }
   };
 
@@ -416,8 +424,15 @@ export default function SuperAdminPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {shops.map((shop) => (
-                    <tr key={shop.id} className={`hover:bg-gray-50 ${!shop.is_active ? 'opacity-60' : ''}`}>
+                  {shops.length === 0 ? (
+                    <tr>
+                      <td colSpan={statusFilter === 'pending' ? 11 : 10} className="px-6 py-8 text-center text-gray-500">
+                        No shops found
+                      </td>
+                    </tr>
+                  ) : (
+                    shops.map((shop) => (
+                      <tr key={shop.id} className={`hover:bg-gray-50 ${!shop.is_active ? 'opacity-60' : ''}`}>
                       <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{shop.shop_name}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{shop.owner_name}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{shop.email}</td>
@@ -489,8 +504,9 @@ export default function SuperAdminPage() {
                           </button>
                         )}
                       </td>
-                    </tr>
-                  ))}
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -734,38 +750,46 @@ export default function SuperAdminPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {shopUsers.map((user) => (
-                      <tr key={user.id}>
-                        <td className="px-4 py-2 text-sm text-gray-900">{user.username}</td>
-                        <td className="px-4 py-2 text-sm text-gray-900">{user.email}</td>
-                        <td className="px-4 py-2 text-sm text-gray-900">
-                          <span className={`px-2 py-1 rounded text-xs ${
-                            user.role === 'admin' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-800'
-                          }`}>
-                            {user.role}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2 text-sm text-gray-900">{user.full_name || '-'}</td>
-                        <td className="px-4 py-2 text-sm text-gray-900">
-                          <span className={`px-2 py-1 rounded text-xs ${
-                            user.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                          }`}>
-                            {user.is_active ? 'Active' : 'Inactive'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2 text-sm text-gray-900">
-                          <button
-                            onClick={() => handleDeleteUser(user.id)}
-                            disabled={deletingUserId === user.id}
-                            className={`text-red-600 hover:text-red-700 ${
-                              deletingUserId === user.id ? 'opacity-50 cursor-not-allowed' : ''
-                            }`}
-                          >
-                            {deletingUserId === user.id ? 'Deleting...' : 'Delete'}
-                          </button>
+                    {shopUsers.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                          No users found
                         </td>
                       </tr>
-                    ))}
+                    ) : (
+                      shopUsers.map((user) => (
+                        <tr key={user.id}>
+                          <td className="px-4 py-2 text-sm text-gray-900">{user.username}</td>
+                          <td className="px-4 py-2 text-sm text-gray-900">{user.email}</td>
+                          <td className="px-4 py-2 text-sm text-gray-900">
+                            <span className={`px-2 py-1 rounded text-xs ${
+                              user.role === 'admin' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-800'
+                            }`}>
+                              {user.role}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2 text-sm text-gray-900">{user.full_name || '-'}</td>
+                          <td className="px-4 py-2 text-sm text-gray-900">
+                            <span className={`px-2 py-1 rounded text-xs ${
+                              user.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                            }`}>
+                              {user.is_active ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2 text-sm text-gray-900">
+                            <button
+                              onClick={() => handleDeleteUser(user.id)}
+                              disabled={deletingUserId === user.id}
+                              className={`text-red-600 hover:text-red-700 ${
+                                deletingUserId === user.id ? 'opacity-50 cursor-not-allowed' : ''
+                              }`}
+                            >
+                              {deletingUserId === user.id ? 'Deleting...' : 'Delete'}
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>

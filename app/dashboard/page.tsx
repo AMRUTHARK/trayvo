@@ -54,12 +54,16 @@ export default function DashboardPage() {
   const fetchShops = async () => {
     try {
       const response = await api.get('/superadmin/shops');
-      setShops(response.data.data);
-      if (response.data.data.length > 0) {
+      setShops(response.data.data || []);
+      if (response.data.data && response.data.data.length > 0) {
         setSelectedShopId(response.data.data[0].id);
       }
-    } catch (error) {
-      console.error('Failed to fetch shops');
+    } catch (error: any) {
+      // Only log actual failures (network/server errors)
+      if (error.response?.status >= 500 || error.request) {
+        console.error('Failed to fetch shops:', error);
+      }
+      setShops([]);
     }
   };
 
@@ -77,10 +81,17 @@ export default function DashboardPage() {
       ]);
 
       setStats(statsRes.data.data);
-      setRevenueData(revenueRes.data.data);
-      setCategoryData(categoryRes.data.data);
-    } catch (error) {
-      console.error('Failed to fetch dashboard data:', error);
+      setRevenueData(revenueRes.data.data || []);
+      setCategoryData(categoryRes.data.data || []);
+    } catch (error: any) {
+      // Only log actual failures (network/server errors)
+      if (error.response?.status >= 500 || error.request) {
+        console.error('Failed to fetch dashboard data:', error);
+      }
+      // Set empty data on error so UI shows empty state
+      setStats(null);
+      setRevenueData([]);
+      setCategoryData([]);
     } finally {
       setLoading(false);
     }

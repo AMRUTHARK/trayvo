@@ -40,12 +40,16 @@ export default function InventoryPage() {
   const fetchShops = async () => {
     try {
       const response = await api.get('/superadmin/shops');
-      setShops(response.data.data);
-      if (response.data.data.length > 0) {
+      setShops(response.data.data || []);
+      if (response.data.data && response.data.data.length > 0) {
         setSelectedShopId(response.data.data[0].id);
       }
-    } catch (error) {
-      toast.error('Failed to fetch shops');
+    } catch (error: any) {
+      // Only show error for actual failures (network/server errors)
+      if (error.response?.status >= 500 || error.request) {
+        toast.error('Failed to fetch shops. Please try again.');
+      }
+      setShops([]);
     }
   };
 
@@ -56,9 +60,13 @@ export default function InventoryPage() {
         params.shop_id = selectedShopId;
       }
       const response = await api.get('/products', { params });
-      setProducts(response.data.data);
-    } catch (error) {
-      toast.error('Failed to fetch products');
+      setProducts(response.data.data || []);
+    } catch (error: any) {
+      // Only show error for actual failures (network/server errors)
+      if (error.response?.status >= 500 || error.request) {
+        toast.error('Failed to fetch products. Please try again.');
+      }
+      setProducts([]);
     }
   };
 
@@ -72,13 +80,22 @@ export default function InventoryPage() {
       
       if (activeTab === 'ledger') {
         const response = await api.get('/inventory/ledger', { params: { ...params, limit: 100 } });
-        setLedger(response.data.data);
+        setLedger(response.data.data || []);
       } else if (activeTab === 'lowstock') {
         const response = await api.get('/inventory/low-stock', { params });
-        setLowStock(response.data.data);
+        setLowStock(response.data.data || []);
       }
-    } catch (error) {
-      toast.error('Failed to fetch data');
+    } catch (error: any) {
+      // Only show error for actual failures (network/server errors)
+      if (error.response?.status >= 500 || error.request) {
+        toast.error('Failed to fetch data. Please try again.');
+      }
+      // Set empty arrays on error so UI shows empty state
+      if (activeTab === 'ledger') {
+        setLedger([]);
+      } else if (activeTab === 'lowstock') {
+        setLowStock([]);
+      }
     } finally {
       setLoading(false);
     }

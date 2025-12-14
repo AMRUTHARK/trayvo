@@ -85,12 +85,16 @@ export default function ProductsPage() {
   const fetchShops = async () => {
     try {
       const response = await api.get('/superadmin/shops');
-      setShops(response.data.data);
-      if (response.data.data.length > 0) {
+      setShops(response.data.data || []);
+      if (response.data.data && response.data.data.length > 0) {
         setSelectedShopId(response.data.data[0].id);
       }
-    } catch (error) {
-      toast.error('Failed to fetch shops');
+    } catch (error: any) {
+      // Only show error for actual failures (network/server errors)
+      if (error.response?.status >= 500 || error.request) {
+        toast.error('Failed to fetch shops. Please try again.');
+      }
+      setShops([]);
     }
   };
 
@@ -105,9 +109,13 @@ export default function ProductsPage() {
       }
       
       const response = await api.get('/products', { params });
-      setProducts(response.data.data);
-    } catch (error) {
-      toast.error('Failed to fetch products');
+      setProducts(response.data.data || []);
+    } catch (error: any) {
+      // Only show error for actual failures (network/server errors)
+      if (error.response?.status >= 500 || error.request) {
+        toast.error('Failed to fetch products. Please try again.');
+      }
+      setProducts([]);
     } finally {
       setLoading(false);
     }
@@ -120,9 +128,13 @@ export default function ProductsPage() {
         params.shop_id = selectedShopId;
       }
       const response = await api.get('/categories', { params });
-      setCategories(response.data.data);
-    } catch (error) {
-      console.error('Failed to fetch categories:', error);
+      setCategories(response.data.data || []);
+    } catch (error: any) {
+      // Only show error for actual failures (network/server errors)
+      if (error.response?.status >= 500 || error.request) {
+        console.error('Failed to fetch categories:', error);
+      }
+      setCategories([]);
     }
   };
 
@@ -484,40 +496,54 @@ export default function ProductsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {products.map((product) => (
-                    <tr key={product.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="font-medium text-gray-900">{product.name}</div>
-                        {parseFloat(product.stock_quantity) < parseFloat(product.min_stock_level || 0) && (
-                          <span className="text-xs text-red-600">Low Stock</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{product.sku}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                        {product.category_name || 'Uncategorized'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        {product.stock_quantity} {product.unit}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        ₹{product.selling_price}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                  {products.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                        <p className="mb-2">No products found</p>
                         <button
-                          onClick={() => handleEdit(product)}
-                          className="text-blue-600 hover:text-blue-700 mr-3"
+                          onClick={() => setShowModal(true)}
+                          className="text-blue-600 hover:text-blue-700 text-sm font-medium"
                         >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDelete(product.id)}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          Delete
+                          Add your first product
                         </button>
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    products.map((product) => (
+                      <tr key={product.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="font-medium text-gray-900">{product.name}</div>
+                          {parseFloat(product.stock_quantity) < parseFloat(product.min_stock_level || 0) && (
+                            <span className="text-xs text-red-600">Low Stock</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{product.sku}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                          {product.category_name || 'Uncategorized'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          {product.stock_quantity} {product.unit}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          ₹{product.selling_price}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <button
+                            onClick={() => handleEdit(product)}
+                            className="text-blue-600 hover:text-blue-700 mr-3"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDelete(product.id)}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
