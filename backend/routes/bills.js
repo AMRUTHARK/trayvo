@@ -48,7 +48,7 @@ router.get('/', async (req, res, next) => {
 
     let query = `
       SELECT b.id, b.bill_number, b.customer_name, b.customer_phone, b.subtotal, 
-             b.discount_amount, b.gst_amount, b.total_amount, b.payment_mode, 
+             b.discount_amount, b.gst_amount, b.total_amount, b.round_off, b.payment_mode, 
              b.status, b.created_at, u.username as cashier_name
       FROM bills b
       JOIN users u ON b.user_id = u.id
@@ -243,19 +243,23 @@ router.post('/', [
       // Apply bill-level discount
       const billDiscountAmount = discount_amount || (subtotal * (discount_percent || 0) / 100);
       const finalSubtotal = subtotal - billDiscountAmount;
-      const finalTotal = finalSubtotal + totalGst;
+      const totalBeforeRound = finalSubtotal + totalGst;
+      
+      // Round off to nearest whole number for easier payment
+      const roundedTotal = Math.round(totalBeforeRound);
+      const roundOff = roundedTotal - totalBeforeRound;
 
       // Create bill
       const [billResult] = await connection.execute(
         `INSERT INTO bills (shop_id, bill_number, user_id, customer_name, customer_phone, 
                           customer_email, subtotal, discount_amount, discount_percent, 
-                          gst_amount, total_amount, payment_mode, payment_details, notes, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed')`,
+                          gst_amount, total_amount, round_off, payment_mode, payment_details, notes, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed')`,
         [
           req.shopId, billNumber, req.user.id,
           customer_name || null, customer_phone || null, customer_email || null,
           subtotal, billDiscountAmount, discount_percent || 0,
-          totalGst, finalTotal, payment_mode,
+          totalGst, roundedTotal, roundOff, payment_mode,
           payment_details ? JSON.stringify(payment_details) : null,
           notes || null
         ]

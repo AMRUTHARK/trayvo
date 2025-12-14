@@ -177,9 +177,8 @@ export default function ThermalPrint({ bill }: ThermalPrintProps) {
       const discount = parseFloat(bill.discount_amount || 0);
       const gstBreakdown = calculateGSTBreakdown(bill.items);
       const gstAmount = parseFloat(bill.gst_amount || 0);
-      const totalBeforeRound = subtotal - discount + gstAmount;
       const total = parseFloat(bill.total_amount || 0);
-      const roundOff = total - totalBeforeRound;
+      const roundOff = parseFloat(bill.round_off || 0);
 
       printContent += `Sub Total: ₹${subtotal.toFixed(2)}\n`;
       

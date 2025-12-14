@@ -90,9 +90,8 @@ export default function BillDetailPage() {
   const subtotal = parseFloat(bill.subtotal || 0);
   const discount = parseFloat(bill.discount_amount || 0);
   const gstAmount = parseFloat(bill.gst_amount || 0);
-  const totalBeforeRound = subtotal - discount + gstAmount;
   const total = parseFloat(bill.total_amount || 0);
-  const roundOff = total - totalBeforeRound;
+  const roundOff = parseFloat(bill.round_off || 0);
 
   return (
     <Layout>

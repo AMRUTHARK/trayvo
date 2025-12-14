@@ -228,9 +228,12 @@ export default function POSPage() {
       const itemTotal = item.unit_price * item.quantity - item.discount_amount;
       return sum + (itemTotal * item.gst_rate) / 100;
     }, 0) : 0;
-    const total = finalSubtotal + totalGst;
+    const totalBeforeRound = finalSubtotal + totalGst;
+    // Round off to nearest whole number for easier payment
+    const roundedTotal = Math.round(totalBeforeRound);
+    const roundOff = roundedTotal - totalBeforeRound;
 
-    return { subtotal, totalDiscount, billDiscount, totalGst, total };
+    return { subtotal, totalDiscount, billDiscount, totalGst, total: roundedTotal, totalBeforeRound, roundOff };
   };
 
   // Recalculate all cart items when GST toggle changes
@@ -291,7 +294,7 @@ export default function POSPage() {
     }
   };
 
-  const { subtotal, totalDiscount, billDiscount, totalGst, total } = calculateTotals();
+  const { subtotal, totalDiscount, billDiscount, totalGst, total, roundOff } = calculateTotals();
 
   return (
     <Layout>
@@ -449,6 +452,12 @@ export default function POSPage() {
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">GST</span>
                   <span className="font-medium">₹{totalGst.toFixed(2)}</span>
+                </div>
+              )}
+              {Math.abs(roundOff) > 0.01 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Round Off</span>
+                  <span className="font-medium">{roundOff > 0 ? '+' : ''}₹{roundOff.toFixed(2)}</span>
                 </div>
               )}
               <div className="flex justify-between text-lg font-bold border-t border-gray-200 pt-2">

@@ -98,6 +98,7 @@ CREATE TABLE IF NOT EXISTS bills (
   discount_percent DECIMAL(5, 2) DEFAULT 0.00,
   gst_amount DECIMAL(10, 2) DEFAULT 0.00,
   total_amount DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+  round_off DECIMAL(10, 2) DEFAULT 0.00,
   payment_mode ENUM('cash', 'upi', 'card', 'mixed') DEFAULT 'cash',
   payment_details JSON,
   status ENUM('completed', 'hold', 'cancelled') DEFAULT 'completed',
