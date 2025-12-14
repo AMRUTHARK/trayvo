@@ -628,7 +628,10 @@ export default function POSPage() {
                     ? JSON.parse(holdBill.bill_data) 
                     : holdBill.bill_data;
                   const itemCount = billData.cart?.length || 0;
-                  const total = billData.cart?.reduce((sum: number, item: any) => sum + (item.total_amount || 0), 0) || 0;
+                  const total = billData.cart?.reduce((sum: number, item: any) => {
+                    const amount = safeParseFloat(item.total_amount, 0);
+                    return sum + amount;
+                  }, 0) || 0;
                   
                   return (
                     <div
@@ -641,7 +644,7 @@ export default function POSPage() {
                             {billData.customerName || 'Walk-in Customer'}
                           </div>
                           <div className="text-sm text-gray-600">
-                            {itemCount} item{itemCount !== 1 ? 's' : ''} • ₹{total.toFixed(2)}
+                            {itemCount} item{itemCount !== 1 ? 's' : ''} • ₹{safeParseFloat(total, 0).toFixed(2)}
                           </div>
                           <div className="text-xs text-gray-500">
                             {new Date(holdBill.created_at).toLocaleString()}
