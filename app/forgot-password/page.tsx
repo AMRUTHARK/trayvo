@@ -25,7 +25,15 @@ export default function ForgotPasswordPage() {
 
     setLoading(true);
     try {
-      await api.post('/auth/forgot-password', formData);
+      // Only send fields that have values
+      const payload: { email?: string; username?: string } = {};
+      if (formData.email) {
+        payload.email = formData.email;
+      }
+      if (formData.username) {
+        payload.username = formData.username;
+      }
+      await api.post('/auth/forgot-password', payload);
       setSubmitted(true);
       toast.success('If an account exists, a password reset link has been sent to your email.');
     } catch (error: any) {
@@ -56,24 +64,38 @@ export default function ForgotPasswordPage() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                  Email (or Username)
+                  Email
                 </label>
                 <input
                   id="email"
-                  type="text"
-                  value={formData.email || formData.username}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    // Try to detect if it's an email
-                    if (value.includes('@')) {
-                      setFormData({ email: value, username: '' });
-                    } else {
-                      setFormData({ email: '', username: value });
-                    }
-                  }}
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
-                  placeholder="Enter your email or username"
-                  required
+                  placeholder="Enter your email address"
+                />
+              </div>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-300"></div>
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-2 bg-white text-gray-500">OR</span>
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
+                  Username
+                </label>
+                <input
+                  id="username"
+                  type="text"
+                  value={formData.username}
+                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
+                  placeholder="Enter your username"
                 />
               </div>
 
@@ -121,7 +143,7 @@ export default function ForgotPasswordPage() {
               }}
               className="text-sm text-blue-600 hover:text-blue-700 font-medium mb-4"
             >
-              Send Another Email
+              Try Again
             </button>
             <div className="mt-4">
               <button

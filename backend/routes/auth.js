@@ -644,9 +644,17 @@ router.put('/profile', authenticate, [
 });
 
 // Forgot password - request password reset
+// Supports all user roles: shop admin, shop cashier, and super_admin
 router.post('/forgot-password', forgotPasswordLimiter, [
-  body('email').optional().isEmail().withMessage('Valid email is required'),
-  body('username').optional().trim().notEmpty().withMessage('Username is required'),
+  body('email')
+    .optional({ checkFalsy: true })
+    .isEmail()
+    .withMessage('Valid email is required'),
+  body('username')
+    .optional({ checkFalsy: true })
+    .trim()
+    .notEmpty()
+    .withMessage('Username cannot be empty'),
 ], async (req, res, next) => {
   try {
     const errors = validationResult(req);
@@ -676,14 +684,20 @@ router.post('/forgot-password', forgotPasswordLimiter, [
     }
 
     // Find user by email or username
-    let query = 'SELECT id, username, email, role, shop_id FROM users WHERE is_active = TRUE';
+    // Explicitly support all roles: admin, cashier, and super_admin
+    // Include shop information to verify shop status for shop users
+    let query = `SELECT u.id, u.username, u.email, u.role, u.shop_id, 
+                        s.shop_name, s.status as shop_status, s.is_active as shop_is_active
+                 FROM users u
+                 LEFT JOIN shops s ON u.shop_id = s.id
+                 WHERE u.is_active = TRUE`;
     const params = [];
 
     if (email) {
-      query += ' AND email = ?';
+      query += ' AND u.email = ?';
       params.push(email);
     } else {
-      query += ' AND username = ?';
+      query += ' AND u.username = ?';
       params.push(username);
     }
 
@@ -697,7 +711,27 @@ router.post('/forgot-password', forgotPasswordLimiter, [
       });
     }
 
-    const user = users[0];
+    // Handle multiple users with same username (can happen with super_admin and shop users)
+    // Priority: shop users (admin/cashier) first, then super_admin
+    let user = null;
+    if (users.length > 1) {
+      // Prioritize shop users (admin/cashier) over super_admin
+      const shopUser = users.find(u => u.shop_id !== null && (u.role === 'admin' || u.role === 'cashier'));
+      user = shopUser || users[0]; // Fallback to first user if no shop user found
+    } else {
+      user = users[0];
+    }
+
+    // For shop users (admin/cashier), verify shop is active
+    if (user.shop_id !== null && (user.role === 'admin' || user.role === 'cashier')) {
+      if (!user.shop_is_active || user.shop_status !== 'active') {
+        // Security: Don't reveal shop status, just return generic message
+        return res.json({
+          success: true,
+          message: 'If an account exists with that email/username, a password reset link has been sent.'
+        });
+      }
+    }
 
     // Generate secure token
     const token = crypto.randomBytes(32).toString('hex');
