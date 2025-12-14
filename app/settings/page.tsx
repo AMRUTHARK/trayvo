@@ -296,6 +296,7 @@ export default function SettingsPage() {
     );
   }
 
+  // Admin view: show full shop settings
   return (
     <Layout>
       <div className="space-y-6">
