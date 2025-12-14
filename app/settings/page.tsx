@@ -277,6 +277,15 @@ export default function SettingsPage() {
             <h2 className="text-xl font-bold text-gray-800 mb-4">My Profile</h2>
             <p className="text-sm text-gray-600 mb-4">Update your username and password</p>
             
+            <div className="mb-4">
+              <a
+                href="/forgot-password"
+                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+              >
+                Forgot Password? Reset it via email →
+              </a>
+            </div>
+            
             <form onSubmit={handleProfileUpdate} className="space-y-4 max-w-md">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>

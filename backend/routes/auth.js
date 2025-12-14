@@ -1,11 +1,13 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const { body, validationResult } = require('express-validator');
 const rateLimit = require('express-rate-limit');
 const pool = require('../config/database');
 const { authenticate } = require('../middleware/auth');
 const { parseUserAgent, getClientIp } = require('../utils/deviceInfo');
+const { sendPasswordResetEmail, isEmailConfigured } = require('../config/email');
 
 const router = express.Router();
 
@@ -17,6 +19,15 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true, // Don't count successful logins
+});
+
+// Rate limiting for forgot password - stricter to prevent abuse
+const forgotPasswordLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3, // Allow 3 requests per hour per IP
+  message: 'Too many password reset requests. Please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
 // Helper function to log login attempts
@@ -627,6 +638,240 @@ router.put('/profile', authenticate, [
       success: true,
       message: 'Profile updated successfully'
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Forgot password - request password reset
+router.post('/forgot-password', forgotPasswordLimiter, [
+  body('email').optional().isEmail().withMessage('Valid email is required'),
+  body('username').optional().trim().notEmpty().withMessage('Username is required'),
+], async (req, res, next) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { email, username } = req.body;
+
+    // Must provide either email or username
+    if (!email && !username) {
+      return res.status(400).json({
+        success: false,
+        message: 'Either email or username is required'
+      });
+    }
+
+    if (!isEmailConfigured()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email service is not configured. Please contact your administrator.'
+      });
+    }
+
+    // Find user by email or username
+    let query = 'SELECT id, username, email, role, shop_id FROM users WHERE is_active = TRUE';
+    const params = [];
+
+    if (email) {
+      query += ' AND email = ?';
+      params.push(email);
+    } else {
+      query += ' AND username = ?';
+      params.push(username);
+    }
+
+    const [users] = await pool.execute(query, params);
+
+    // Security: Always return success message even if user not found (prevents user enumeration)
+    if (users.length === 0) {
+      return res.json({
+        success: true,
+        message: 'If an account exists with that email/username, a password reset link has been sent.'
+      });
+    }
+
+    const user = users[0];
+
+    // Generate secure token
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 1); // Expires in 1 hour
+
+    // Invalidate any existing tokens for this user
+    await pool.execute(
+      'UPDATE password_reset_tokens SET used = TRUE WHERE user_id = ? AND used = FALSE',
+      [user.id]
+    );
+
+    // Insert new token
+    await pool.execute(
+      'INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (?, ?, ?)',
+      [user.id, token, expiresAt]
+    );
+
+    // Send email
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const resetUrl = `${frontendUrl}/reset-password/${token}`;
+
+    try {
+      await sendPasswordResetEmail(user.email, user.username, resetUrl);
+      
+      res.json({
+        success: true,
+        message: 'If an account exists with that email/username, a password reset link has been sent.'
+      });
+    } catch (emailError) {
+      // If email fails, still return success (security best practice)
+      // But log the error for admin to see
+      console.error('Failed to send password reset email:', emailError);
+      
+      // In development, return the token for testing
+      if (process.env.NODE_ENV === 'development') {
+        return res.json({
+          success: true,
+          message: 'Password reset token generated but email sending failed',
+          warning: `Email error: ${emailError.message}`,
+          data: {
+            token: token,
+            reset_url: resetUrl,
+            expires_at: expiresAt
+          }
+        });
+      }
+
+      res.json({
+        success: true,
+        message: 'If an account exists with that email/username, a password reset link has been sent.'
+      });
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Verify reset token
+router.get('/reset-password/:token', async (req, res, next) => {
+  try {
+    const { token } = req.params;
+
+    const [tokens] = await pool.execute(
+      `SELECT prt.*, u.username, u.email 
+       FROM password_reset_tokens prt
+       JOIN users u ON prt.user_id = u.id
+       WHERE prt.token = ? AND prt.used = FALSE AND u.is_active = TRUE`,
+      [token]
+    );
+
+    if (tokens.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired reset token'
+      });
+    }
+
+    const resetToken = tokens[0];
+
+    // Check if token is expired
+    if (new Date() > new Date(resetToken.expires_at)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Reset token has expired. Please request a new one.'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Token is valid',
+      data: {
+        username: resetToken.username,
+        email: resetToken.email
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Reset password with token
+router.post('/reset-password', [
+  body('token').trim().notEmpty().withMessage('Reset token is required'),
+  body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters')
+], async (req, res, next) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { token, password } = req.body;
+
+    // Find token
+    const [tokens] = await pool.execute(
+      `SELECT prt.*, u.id as user_id, u.username 
+       FROM password_reset_tokens prt
+       JOIN users u ON prt.user_id = u.id
+       WHERE prt.token = ? AND prt.used = FALSE AND u.is_active = TRUE`,
+      [token]
+    );
+
+    if (tokens.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired reset token'
+      });
+    }
+
+    const resetToken = tokens[0];
+
+    // Check if token is expired
+    if (new Date() > new Date(resetToken.expires_at)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Reset token has expired. Please request a new one.'
+      });
+    }
+
+    // Hash new password
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // Update password and mark token as used
+    const connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    try {
+      await connection.execute(
+        'UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?',
+        [passwordHash, resetToken.user_id]
+      );
+
+      await connection.execute(
+        'UPDATE password_reset_tokens SET used = TRUE WHERE id = ?',
+        [resetToken.id]
+      );
+
+      await connection.commit();
+      connection.release();
+
+      res.json({
+        success: true,
+        message: 'Password has been reset successfully. You can now login with your new password.'
+      });
+    } catch (error) {
+      await connection.rollback();
+      connection.release();
+      throw error;
+    }
   } catch (error) {
     next(error);
   }

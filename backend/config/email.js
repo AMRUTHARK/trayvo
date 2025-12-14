@@ -390,8 +390,199 @@ const createTransporter = () => {
   return null;
 };
 
+// Send password reset email using SendGrid Web API
+const sendPasswordResetEmail = async (email, username, resetUrl) => {
+  // Validate email format before proceeding
+  if (!isValidEmail(email)) {
+    throw new Error(`Invalid email address: ${email}`);
+  }
+
+  if (!isEmailConfigured()) {
+    throw new Error('Email service is not configured. Please set SENDGRID_API_KEY environment variable.');
+  }
+
+  // Initialize SendGrid safely
+  if (!isSendGridInitialized()) {
+    initializeSendGrid();
+  }
+
+  const fromEmail = process.env.SMTP_FROM_EMAIL || process.env.SENDGRID_FROM_EMAIL;
+  const fromName = process.env.SMTP_FROM_NAME || process.env.SENDGRID_FROM_NAME || 'Trayvo Billing System';
+
+  if (!fromEmail) {
+    throw new Error('SENDGRID_FROM_EMAIL or SMTP_FROM_EMAIL environment variable is required.');
+  }
+
+  if (!isValidEmail(fromEmail)) {
+    throw new Error(`Invalid from email address: ${fromEmail}`);
+  }
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Password Reset</title>
+    </head>
+    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+      <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+        <h1 style="color: white; margin: 0;">Trayvo Billing System</h1>
+      </div>
+      <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; border: 1px solid #e0e0e0;">
+        <h2 style="color: #667eea; margin-top: 0;">Password Reset Request</h2>
+        <p>Hello ${username || 'User'},</p>
+        <p>We received a request to reset your password for your Trayvo Billing System account.</p>
+        
+        <div style="background: white; padding: 20px; border-radius: 5px; margin: 20px 0; text-align: center; border-left: 4px solid #667eea;">
+          <p style="margin: 0 0 15px 0; font-size: 14px; color: #666;">Click the button below to reset your password:</p>
+          <a href="${resetUrl}" style="display: inline-block; background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 10px 0;">Reset Password</a>
+        </div>
+
+        <p style="font-size: 14px; color: #666;">Or copy and paste this link into your browser:</p>
+        <p style="font-size: 12px; color: #999; word-break: break-all; background: #f0f0f0; padding: 10px; border-radius: 5px;">${resetUrl}</p>
+
+        <div style="background: #fff3cd; border: 1px solid #ffc107; padding: 15px; border-radius: 5px; margin: 20px 0;">
+          <p style="margin: 0; font-size: 14px; color: #856404;">
+            <strong>⚠️ Security Notice:</strong><br>
+            • This link will expire in 1 hour<br>
+            • If you didn't request this, please ignore this email<br>
+            • Your password will remain unchanged if you don't click the link
+          </p>
+        </div>
+
+        <p style="font-size: 12px; color: #999; margin-top: 30px; border-top: 1px solid #e0e0e0; padding-top: 20px;">
+          This is an automated email. Please do not reply to this message.<br>
+          If you have any questions, please contact your system administrator.
+        </p>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const textContent = `
+    Password Reset Request - Trayvo Billing System
+    
+    Hello ${username || 'User'},
+    
+    We received a request to reset your password for your Trayvo Billing System account.
+    
+    Click the following link to reset your password:
+    ${resetUrl}
+    
+    This link will expire in 1 hour.
+    
+    If you didn't request this password reset, please ignore this email. Your password will remain unchanged.
+    
+    This is an automated email. Please do not reply to this message.
+  `;
+
+  const msg = {
+    to: email.trim(),
+    from: {
+      email: fromEmail.trim(),
+      name: fromName
+    },
+    subject: 'Reset Your Password - Trayvo Billing System',
+    text: textContent,
+    html: htmlContent,
+  };
+
+  try {
+    const sendPromise = sgMail.send(msg);
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Email sending timeout: Operation took longer than 30 seconds')), 30000);
+    });
+    
+    let result;
+    
+    try {
+      result = await Promise.race([sendPromise, timeoutPromise]);
+    } catch (raceError) {
+      if (raceError.message && raceError.message.includes('timeout')) {
+        throw new Error('Email sending timeout: Operation took longer than 30 seconds. Please check your network connection and SendGrid service status.');
+      }
+      throw raceError;
+    }
+    
+    let messageId = 'sent';
+    
+    try {
+      if (Array.isArray(result) && result.length > 0) {
+        const response = result[0];
+        if (response && typeof response === 'object' && response.headers && typeof response.headers === 'object') {
+          messageId = response.headers['x-message-id'] || 
+                     response.headers['X-Message-Id'] || 
+                     'sent';
+        }
+      } else if (result && typeof result === 'object') {
+        if (result.headers && typeof result.headers === 'object') {
+          messageId = result.headers['x-message-id'] || 
+                     result.headers['X-Message-Id'] || 
+                     'sent';
+        }
+      }
+    } catch (err) {
+      console.warn('Could not extract message ID from SendGrid response:', err.message);
+      messageId = 'sent';
+    }
+
+    return { 
+      success: true, 
+      messageId: messageId
+    };
+  } catch (error) {
+    let errorDetails = {
+      message: error.message || 'Unknown error',
+      code: error.code || null,
+      responseCode: error.response?.statusCode || error.response?.status || null,
+      service: 'sendgrid',
+    };
+
+    if (error.response) {
+      errorDetails.responseBody = process.env.NODE_ENV === 'development' 
+        ? error.response.body 
+        : 'Response available in logs';
+      errorDetails.responseHeaders = error.response.headers || null;
+    }
+
+    console.error('Email sending error details:', errorDetails);
+
+    const errorMessageParts = [`Error: ${error.message}`];
+    if (error.code) {
+      errorMessageParts.push(`Code: ${error.code}`);
+    }
+    if (error.response?.statusCode || error.response?.status) {
+      errorMessageParts.push(`HTTP Status: ${error.response.statusCode || error.response.status}`);
+    }
+    if (error.response?.body?.errors && Array.isArray(error.response.body.errors)) {
+      const sendGridErrors = error.response.body.errors
+        .map(e => (e && typeof e === 'object' && e.message) ? e.message : String(e))
+        .filter(msg => msg)
+        .join('; ');
+      if (sendGridErrors) {
+        errorMessageParts.push(`SendGrid Errors: ${sendGridErrors}`);
+      }
+    }
+
+    const detailedErrorMessage = errorMessageParts.join(' | ');
+
+    const emailError = new Error(detailedErrorMessage);
+    emailError.code = error.code;
+    emailError.responseCode = error.response?.statusCode || error.response?.status;
+    emailError.originalMessage = error.message;
+    emailError.service = 'sendgrid';
+    if (error.response?.body?.errors && Array.isArray(error.response.body.errors)) {
+      emailError.sendGridErrors = error.response.body.errors;
+    }
+
+    throw emailError;
+  }
+};
+
 module.exports = {
   sendRegistrationInvitation,
+  sendPasswordResetEmail,
   isEmailConfigured,
   createTransporter, // Kept for backward compatibility
   testEmailConnection,
