@@ -320,7 +320,19 @@ router.post('/login', authLimiter, [
       // Log failed login attempt (validation error)
       const { username, shop_id } = req.body;
       if (username) {
-        await logLoginAttempt(null, shop_id || null, username, req, 'failed', 'Validation failed');
+        try {
+          // Normalize shop_id for logging
+          let normalizedShopId = shop_id;
+          if (shop_id === 'null' || shop_id === 'undefined' || shop_id === '') {
+            normalizedShopId = null;
+          } else if (shop_id !== null && shop_id !== undefined) {
+            const parsedShopId = parseInt(shop_id);
+            normalizedShopId = !isNaN(parsedShopId) && parsedShopId > 0 ? parsedShopId : null;
+          }
+          await logLoginAttempt(null, normalizedShopId, username, req, 'failed', 'Validation failed');
+        } catch (logError) {
+          console.error('Error logging login attempt:', logError);
+        }
       }
       
       return res.status(400).json({
@@ -331,6 +343,15 @@ router.post('/login', authLimiter, [
     }
 
     const { username, password, shop_id } = req.body;
+
+    // Normalize shop_id: handle string "null", "undefined", empty strings, etc.
+    let normalizedShopId = shop_id;
+    if (shop_id === 'null' || shop_id === 'undefined' || shop_id === '') {
+      normalizedShopId = null;
+    } else if (shop_id !== null && shop_id !== undefined) {
+      const parsedShopId = parseInt(shop_id);
+      normalizedShopId = !isNaN(parsedShopId) && parsedShopId > 0 ? parsedShopId : null;
+    }
 
     // Strict role-based filtering to prevent security vulnerability
     // When shop_id is null (explicit): search only for super_admin users
@@ -344,11 +365,11 @@ router.post('/login', authLimiter, [
     let params = [username];
 
     // Strict role-based filtering based on shop_id presence
-    if (shop_id === null) {
+    if (normalizedShopId === null) {
       // shop_id explicitly null (superadmin checkbox checked) - search only for super_admin users
       query += ' AND u.shop_id IS NULL AND u.role = ?';
       params.push('super_admin');
-    } else if (shop_id === undefined || shop_id === '') {
+    } else if (normalizedShopId === undefined) {
       // shop_id not provided (regular user login) - search only for regular users (admin/cashier)
       // Don't filter by shop_id value, just exclude superadmins
       query += ' AND u.shop_id IS NOT NULL AND u.role IN (?, ?)';
@@ -356,14 +377,18 @@ router.post('/login', authLimiter, [
     } else {
       // shop_id provided as a number - search for regular users with that specific shop_id
       query += ' AND u.shop_id IS NOT NULL AND u.shop_id = ? AND u.role IN (?, ?)';
-      params.push(parseInt(shop_id), 'admin', 'cashier');
+      params.push(normalizedShopId, 'admin', 'cashier');
     }
 
     const [users] = await pool.execute(query, params);
 
     // Defensive check: if multiple users match, it's a data integrity issue
     if (users.length > 1) {
-      await logLoginAttempt(null, shop_id || null, username, req, 'failed', 'Multiple users found - data integrity error');
+      try {
+        await logLoginAttempt(null, normalizedShopId, username, req, 'failed', 'Multiple users found - data integrity error');
+      } catch (logError) {
+        console.error('Error logging login attempt:', logError);
+      }
       return res.status(500).json({
         success: false,
         message: 'Authentication error: Multiple users found. Please contact system administrator.'
@@ -372,7 +397,11 @@ router.post('/login', authLimiter, [
 
     if (!users.length) {
       // Log failed login attempt (user not found)
-      await logLoginAttempt(null, shop_id || null, username, req, 'failed', 'User not found');
+      try {
+        await logLoginAttempt(null, normalizedShopId, username, req, 'failed', 'User not found');
+      } catch (logError) {
+        console.error('Error logging login attempt:', logError);
+      }
       
       return res.status(401).json({
         success: false,
@@ -384,7 +413,11 @@ router.post('/login', authLimiter, [
 
     if (!user.is_active) {
       // Log failed login attempt (inactive account)
-      await logLoginAttempt(user.id, user.shop_id, username, req, 'failed', 'Account is inactive');
+      try {
+        await logLoginAttempt(user.id, user.shop_id, username, req, 'failed', 'Account is inactive');
+      } catch (logError) {
+        console.error('Error logging login attempt:', logError);
+      }
       
       return res.status(401).json({
         success: false,
@@ -396,7 +429,11 @@ router.post('/login', authLimiter, [
     const isValidPassword = await bcrypt.compare(password, user.password_hash);
     if (!isValidPassword) {
       // Log failed login attempt (wrong password)
-      await logLoginAttempt(user.id, user.shop_id, username, req, 'failed', 'Invalid password');
+      try {
+        await logLoginAttempt(user.id, user.shop_id, username, req, 'failed', 'Invalid password');
+      } catch (logError) {
+        console.error('Error logging login attempt:', logError);
+      }
       
       return res.status(401).json({
         success: false,
@@ -421,7 +458,12 @@ router.post('/login', authLimiter, [
     );
 
     // Log successful login attempt (user.id is guaranteed to be valid at this point)
-    await logLoginAttempt(user.id, user.shop_id, username, req, 'success', null);
+    try {
+      await logLoginAttempt(user.id, user.shop_id, username, req, 'success', null);
+    } catch (logError) {
+      // Don't fail login if logging fails, just log the error
+      console.error('Error logging successful login attempt:', logError);
+    }
 
     res.json({
       success: true,
