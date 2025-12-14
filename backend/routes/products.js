@@ -185,27 +185,19 @@ router.post('/', [
       }
     }
 
+    // Stock quantity is always set to 0 - stock must be added via Purchase module or Inventory Adjustment
+    // This ensures all stock movements are properly tracked with supplier information and purchase records
     const [result] = await pool.execute(
       `INSERT INTO products (shop_id, category_id, name, sku, barcode, unit, cost_price, 
                             selling_price, gst_rate, stock_quantity, min_stock_level, 
                             description, image_url, is_active)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, TRUE)`,
       [
         req.shopId, category_id || null, name, sku, barcode || null,
         unit || 'pcs', cost_price, selling_price, gst_rate || 0,
-        stock_quantity || 0, min_stock_level || 0, description || null, image_url || null
+        min_stock_level || 0, description || null, image_url || null
       ]
     );
-
-    // Add initial stock entry to ledger
-    if (stock_quantity > 0) {
-      await pool.execute(
-        `INSERT INTO stock_ledger (shop_id, product_id, transaction_type, quantity_change, 
-                                  quantity_before, quantity_after, notes, created_by)
-         VALUES (?, ?, 'purchase', ?, 0, ?, 'Initial stock', ?)`,
-        [req.shopId, result.insertId, stock_quantity, stock_quantity, req.user.id]
-      );
-    }
 
     res.status(201).json({
       success: true,
@@ -531,11 +523,13 @@ router.post('/bulk-import', upload.single('file'), async (req, res, next) => {
                   continue;
                 }
 
+                // Stock quantity is always set to 0 - stock must be added via Purchase module or Inventory Adjustment
+                // This ensures all stock movements are properly tracked with supplier information and purchase records
                 const [result] = await connection.execute(
                   `INSERT INTO products (shop_id, category_id, name, sku, barcode, unit, 
                                         cost_price, selling_price, gst_rate, stock_quantity, 
                                         min_stock_level, description, is_active)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE)`,
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, TRUE)`,
                   [
                     req.shopId, 
                     category_id, 
@@ -546,21 +540,10 @@ router.post('/bulk-import', upload.single('file'), async (req, res, next) => {
                     parseFloat(cost_price), 
                     parseFloat(selling_price),
                     parseFloat(gst_rate) || 0, 
-                    parseFloat(stock_quantity) || 0,
                     parseFloat(min_stock_level) || 0, 
                     description ? description.trim() : null
                   ]
                 );
-
-                if (stock_quantity > 0) {
-                  await connection.execute(
-                    `INSERT INTO stock_ledger (shop_id, product_id, transaction_type, 
-                                              quantity_change, quantity_before, quantity_after, 
-                                              notes, created_by)
-                     VALUES (?, ?, 'purchase', ?, 0, ?, 'Bulk import', ?)`,
-                    [req.shopId, result.insertId, stock_quantity, stock_quantity, req.user.id]
-                  );
-                }
 
                 successCount++;
               } catch (err) {

@@ -31,7 +31,6 @@ export default function ProductsPage() {
     cost_price: '',
     selling_price: '',
     gst_rate: '0',
-    stock_quantity: '0',
     min_stock_level: '0',
     description: '',
   });
@@ -147,7 +146,7 @@ export default function ProductsPage() {
         cost_price: parseFloat(formData.cost_price),
         selling_price: parseFloat(formData.selling_price),
         gst_rate: parseFloat(formData.gst_rate),
-        stock_quantity: parseFloat(formData.stock_quantity),
+        stock_quantity: 0, // Always set to 0 - stock must be added via Purchase module
         min_stock_level: parseFloat(formData.min_stock_level),
       };
 
@@ -179,7 +178,6 @@ export default function ProductsPage() {
       cost_price: product.cost_price,
       selling_price: product.selling_price,
       gst_rate: product.gst_rate,
-      stock_quantity: product.stock_quantity,
       min_stock_level: product.min_stock_level,
       description: product.description || '',
     });
@@ -208,7 +206,6 @@ export default function ProductsPage() {
       cost_price: '',
       selling_price: '',
       gst_rate: '0',
-      stock_quantity: '0',
       min_stock_level: '0',
       description: '',
     });
@@ -282,10 +279,12 @@ export default function ProductsPage() {
       const secondCategory = categoryNames[1] || 'Groceries';
       const thirdCategory = categoryNames[2] || 'Clothing';
 
+      // Note: stock_quantity in sample data is set to 0 - it will be ignored during import
+      // Stock must be added via Purchase module after product creation
       const sampleData = [
-        ['Product 1', 'SKU001', '1234567890123', firstCategory, 'pcs', 100, 150, 18, 100, 10, 'Product description 1'],
-        ['Product 2', 'SKU002', '1234567890124', secondCategory, 'kg', 50, 75, 5, 200, 20, 'Product description 2'],
-        ['Product 3', 'SKU003', '1234567890125', thirdCategory, 'pcs', 200, 300, 12, 50, 5, 'Product description 3']
+        ['Product 1', 'SKU001', '1234567890123', firstCategory, 'pcs', 100, 150, 18, 0, 10, 'Product description 1'],
+        ['Product 2', 'SKU002', '1234567890124', secondCategory, 'kg', 50, 75, 5, 0, 20, 'Product description 2'],
+        ['Product 3', 'SKU003', '1234567890125', thirdCategory, 'pcs', 200, 300, 12, 0, 5, 'Product description 3']
       ];
 
       sampleData.forEach(row => {
@@ -850,16 +849,6 @@ export default function ProductsPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Stock Quantity</label>
-                    <input
-                      type="number"
-                      step="0.001"
-                      value={formData.stock_quantity}
-                      onChange={(e) => setFormData({ ...formData, stock_quantity: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
-                    />
-                  </div>
-                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Min Stock Level</label>
                     <input
                       type="number"
@@ -935,10 +924,14 @@ export default function ProductsPage() {
                 <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-sm text-yellow-800">
                   <p className="font-semibold mb-1">CSV Format (Columns):</p>
                   <p><strong>Required:</strong> name, sku, cost_price, selling_price</p>
-                  <p><strong>Optional:</strong> barcode, <strong>category_name</strong>, unit, gst_rate, stock_quantity, min_stock_level, description</p>
+                  <p><strong>Optional:</strong> barcode, <strong>category_name</strong>, unit, gst_rate, min_stock_level, description</p>
                   <p className="mt-2 text-xs">
                     <strong>Note:</strong> The category_name column should contain the exact category name from the dropdown below. 
                     Use the dropdown to copy the correct category name.
+                  </p>
+                  <p className="mt-2 text-xs font-semibold text-red-700">
+                    ⚠️ Stock quantity is not set during import. All products are created with stock_quantity = 0. 
+                    Use the Purchase module to add stock with proper supplier tracking.
                   </p>
                 </div>
                 {categories.length > 0 && (
