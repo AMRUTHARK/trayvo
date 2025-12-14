@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Layout from '@/components/Layout';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
-import { isAdmin, getStoredUser, isCashier } from '@/lib/auth';
+import { isAdmin, getStoredUser, isCashier, isSuperAdmin } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
 import PasswordInput from '@/components/PasswordInput';
 
@@ -12,6 +12,7 @@ export default function SettingsPage() {
   const router = useRouter();
   const currentUser = getStoredUser();
   const isCashierUser = isCashier();
+  const isSuperAdminUser = isSuperAdmin();
   const [shop, setShop] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,7 +37,7 @@ export default function SettingsPage() {
     logo_url: '',
   });
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  // For cashiers: only allow editing own username/password
+  // For cashiers and superadmins: only allow editing own username/password
   const [profileForm, setProfileForm] = useState({
     username: '',
     password: '',
@@ -45,8 +46,8 @@ export default function SettingsPage() {
   });
 
   useEffect(() => {
-    if (isCashierUser) {
-      // Cashiers can access settings but only to edit their own profile
+    if (isCashierUser || isSuperAdminUser) {
+      // Cashiers and superadmins can access settings but only to edit their own profile
       fetchUserProfile();
     } else if (!isAdmin()) {
       router.push('/dashboard');
@@ -220,8 +221,8 @@ export default function SettingsPage() {
     );
   }
 
-  // Cashier view: only show profile edit form
-  if (isCashierUser) {
+  // Cashier and superadmin view: only show profile edit form
+  if (isCashierUser || isSuperAdminUser) {
     return (
       <Layout>
         <div className="space-y-6">
