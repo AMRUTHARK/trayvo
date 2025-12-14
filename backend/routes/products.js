@@ -557,13 +557,27 @@ router.post('/bulk-import', upload.single('file'), async (req, res, next) => {
                   continue;
                 }
 
-                // Stock quantity is always set to 0 - stock must be added via Purchase module or Inventory Adjustment
-                // This ensures all stock movements are properly tracked with supplier information and purchase records
+                // Parse and validate stock_quantity from CSV if provided, default to 0
+                // stock_quantity is already extracted from CSV row above (line 519)
+                let parsedStockQuantity = 0;
+                // Handle stock_quantity: it could be a string, number, or null/undefined
+                if (stock_quantity !== null && stock_quantity !== undefined && stock_quantity !== '') {
+                  const parsed = parseFloat(stock_quantity);
+                  if (!isNaN(parsed) && parsed >= 0) {
+                    parsedStockQuantity = parsed;
+                  } else {
+                    // Log warning but continue with 0
+                    errors.push(`Row ${i + 2}: Invalid stock_quantity value "${stock_quantity}". Using 0 instead.`);
+                  }
+                }
+                // If stock_quantity is null, undefined, empty string, or 0, parsedStockQuantity remains 0 (default)
+
+                // Insert product with stock_quantity from CSV (or 0 if not provided/invalid)
                 const [result] = await connection.execute(
                   `INSERT INTO products (shop_id, category_id, name, sku, barcode, unit, 
                                         cost_price, selling_price, gst_rate, stock_quantity, 
                                         min_stock_level, description, is_active)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, TRUE)`,
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE)`,
                   [
                     req.shopId, 
                     category_id, 
@@ -574,10 +588,39 @@ router.post('/bulk-import', upload.single('file'), async (req, res, next) => {
                     parseFloat(cost_price), 
                     parseFloat(selling_price),
                     parseFloat(gst_rate) || 0, 
+                    parsedStockQuantity, // Use parsed CSV value instead of hardcoded 0
                     parseFloat(min_stock_level) || 0, 
                     description ? description.trim() : null
                   ]
                 );
+
+                const productId = result.insertId;
+
+                // If stock_quantity > 0, create ledger entry for audit trail
+                // This maintains inventory tracking integrity while allowing initial stock during import
+                if (parsedStockQuantity > 0) {
+                  try {
+                    await connection.execute(
+                      `INSERT INTO stock_ledger (shop_id, product_id, transaction_type, reference_type,
+                                                quantity_change, quantity_before, quantity_after, 
+                                                notes, created_by)
+                       VALUES (?, ?, 'adjustment', 'adjustment', ?, 0, ?, ?, ?)`,
+                      [
+                        req.shopId, 
+                        productId, 
+                        parsedStockQuantity, 
+                        parsedStockQuantity,
+                        'Initial stock from CSV import', 
+                        req.user.id
+                      ]
+                    );
+                  } catch (ledgerError) {
+                    // Log ledger error but don't fail the product creation
+                    // This ensures products are still created even if ledger entry fails
+                    console.error(`Failed to create ledger entry for product ${productId}:`, ledgerError);
+                    errors.push(`Row ${i + 2}: Product created but failed to log stock in ledger: ${ledgerError.message}`);
+                  }
+                }
 
                 successCount++;
               } catch (err) {

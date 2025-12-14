@@ -518,6 +518,12 @@ export default function ProductsPage() {
       return;
     }
 
+    // Ensure categories exist before importing
+    if (categories.length === 0) {
+      toast.error('Please create at least one category before importing products');
+      return;
+    }
+
     setImporting(true);
     try {
       const formData = new FormData();
@@ -548,23 +554,35 @@ export default function ProductsPage() {
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-gray-800">Products</h1>
           <div className="flex gap-2">
+            {categories.length === 0 && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-sm text-yellow-800 mb-4 col-span-full">
+                ⚠️ Please create at least one category before importing or exporting products.
+              </div>
+            )}
             <button
               onClick={() => exportProducts('excel')}
-              disabled={products.length === 0}
+              disabled={products.length === 0 || categories.length === 0}
               className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               📊 Export Excel
             </button>
             <button
               onClick={() => exportProducts('csv')}
-              disabled={products.length === 0}
+              disabled={products.length === 0 || categories.length === 0}
               className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               📄 Export CSV
             </button>
             <button
-              onClick={() => setShowImportModal(true)}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+              onClick={() => {
+                if (categories.length === 0) {
+                  toast.error('Please create at least one category before importing products');
+                  return;
+                }
+                setShowImportModal(true);
+              }}
+              disabled={categories.length === 0}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               📥 Import CSV
             </button>
@@ -902,6 +920,7 @@ export default function ProductsPage() {
                 <div>
                   <p className="text-sm text-gray-600 mb-2">
                     Upload a CSV or Excel file with product data. Download the sample Excel template with category dropdowns.
+                    Categories can be selected from the dropdown in the category_name column of the downloaded Excel template.
                   </p>
                   <button
                     onClick={downloadSampleCSV}
@@ -925,63 +944,16 @@ export default function ProductsPage() {
                 <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-sm text-yellow-800">
                   <p className="font-semibold mb-1">CSV Format (Columns):</p>
                   <p><strong>Required:</strong> name, sku, cost_price, selling_price</p>
-                  <p><strong>Optional:</strong> barcode, <strong>category_name</strong>, unit, gst_rate, min_stock_level, description</p>
+                  <p><strong>Optional:</strong> barcode, <strong>category_name</strong>, unit, gst_rate, <strong>stock_quantity</strong>, min_stock_level, description</p>
                   <p className="mt-2 text-xs">
-                    <strong>Note:</strong> The category_name column should contain the exact category name from the dropdown below. 
-                    Use the dropdown to copy the correct category name.
+                    <strong>Note:</strong> The category_name column should contain the exact category name. 
+                    Use the dropdown in the downloaded Excel template to select from pre-created categories.
                   </p>
-                  <p className="mt-2 text-xs font-semibold text-red-700">
-                    ⚠️ Stock quantity is not set during import. All products are created with stock_quantity = 0. 
-                    Use the Purchase module to add stock with proper supplier tracking.
+                  <p className="mt-2 text-xs">
+                    <strong>Stock Quantity:</strong> You can set initial stock quantity in the CSV file. 
+                    If not provided, it defaults to 0. Stock quantities set during import will be tracked in the inventory ledger.
                   </p>
                 </div>
-                {categories.length > 0 && (
-                  <div className="bg-blue-50 border border-blue-200 rounded p-3">
-                    <p className="text-sm font-semibold text-blue-800 mb-2">
-                      Available Categories (for category_name column):
-                    </p>
-                    <div>
-                      <select
-                        className="w-full px-3 py-2 border border-blue-300 rounded-lg bg-white text-gray-900 text-sm font-medium"
-                        onChange={(e) => {
-                          if (e.target.value) {
-                            navigator.clipboard.writeText(e.target.value);
-                            toast.success(`Category "${e.target.value}" copied to clipboard!`);
-                            e.target.value = '';
-                          }
-                        }}
-                      >
-                        <option value="">📋 Select a category to copy its name</option>
-                        {categories.map((cat) => (
-                          <option key={cat.id} value={cat.name}>
-                            {cat.name}
-                          </option>
-                        ))}
-                      </select>
-                      <p className="text-xs text-blue-700 mt-2">
-                        💡 Tip: Select a category above to copy its exact name for use in the category_name column of your CSV file
-                      </p>
-                      <div className="mt-2 text-xs text-blue-600">
-                        <strong>All available categories:</strong>
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {categories.map((cat) => (
-                            <span
-                              key={cat.id}
-                              className="px-2 py-1 bg-white border border-blue-200 rounded cursor-pointer hover:bg-blue-100"
-                              onClick={() => {
-                                navigator.clipboard.writeText(cat.name);
-                                toast.success(`Category "${cat.name}" copied!`);
-                              }}
-                              title={`Click to copy: ${cat.name}`}
-                            >
-                              {cat.name}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
                 <div className="flex justify-end gap-3">
                   <button
                     type="button"
