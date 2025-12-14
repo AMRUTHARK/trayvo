@@ -239,8 +239,23 @@ function RegisterForm() {
               />
             </div>
 
-            {/* Role is fixed to 'admin' for registration links - removed UI selection */}
-            <input type="hidden" name="role" value="admin" />
+            <div>
+              <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-2">
+                Role *
+              </label>
+              <input
+                id="role"
+                type="text"
+                value="Admin"
+                readOnly
+                disabled
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 cursor-not-allowed"
+                title="Role is fixed to Admin for registration links"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Registration links create Shop Admin accounts only
+              </p>
+            </div>
 
             <div>
               <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
