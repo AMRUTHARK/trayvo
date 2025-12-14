@@ -16,14 +16,11 @@ export default function SalesReturnsPage() {
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
   useEffect(() => {
-    if (isCashier()) {
-      router.push('/pos');
-    }
+    // Hide this feature from all users - redirect to dashboard
+    router.push('/dashboard');
   }, [router]);
 
-  if (isCashier()) {
-    return null;
-  }
+  return null;
 
   useEffect(() => {
     fetchReturns();

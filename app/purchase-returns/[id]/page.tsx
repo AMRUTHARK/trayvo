@@ -14,8 +14,11 @@ export default function PurchaseReturnDetailPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchReturn();
-  }, [params.id]);
+    // Hide this feature from all users - redirect to dashboard
+    router.push('/dashboard');
+  }, [router]);
+
+  return null;
 
   const fetchReturn = async () => {
     try {
