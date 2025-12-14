@@ -50,6 +50,50 @@ export default function BillDetailPage() {
     return null;
   }
 
+  // Calculate GST breakdown by rate
+  const calculateGSTBreakdown = () => {
+    const gstMap: { [key: number]: { cgst: number; sgst: number; taxable: number } } = {};
+    
+    bill.items.forEach((item: any) => {
+      const gstRate = parseFloat(item.gst_rate || 0);
+      const itemTotal = parseFloat(item.unit_price || 0) * parseFloat(item.quantity || 0);
+      const discount = parseFloat(item.discount_amount || 0);
+      const taxable = itemTotal - discount;
+      
+      if (gstRate > 0) {
+        const cgstRate = gstRate / 2;
+        const sgstRate = gstRate / 2;
+        const cgst = (taxable * cgstRate) / 100;
+        const sgst = (taxable * sgstRate) / 100;
+
+        if (!gstMap[gstRate]) {
+          gstMap[gstRate] = { cgst: 0, sgst: 0, taxable: 0 };
+        }
+        gstMap[gstRate].cgst += cgst;
+        gstMap[gstRate].sgst += sgst;
+        gstMap[gstRate].taxable += taxable;
+      } else {
+        if (!gstMap[0]) {
+          gstMap[0] = { cgst: 0, sgst: 0, taxable: 0 };
+        }
+        gstMap[0].taxable += taxable;
+      }
+    });
+
+    return gstMap;
+  };
+
+  const gstBreakdown = calculateGSTBreakdown();
+  const gstRates = Object.keys(gstBreakdown).sort((a, b) => parseFloat(b) - parseFloat(a));
+  const totalQty = bill.items.reduce((sum: number, item: any) => sum + parseFloat(item.quantity || 0), 0);
+  const numItems = bill.items.length;
+  const subtotal = parseFloat(bill.subtotal || 0);
+  const discount = parseFloat(bill.discount_amount || 0);
+  const gstAmount = parseFloat(bill.gst_amount || 0);
+  const totalBeforeRound = subtotal - discount + gstAmount;
+  const total = parseFloat(bill.total_amount || 0);
+  const roundOff = total - totalBeforeRound;
+
   return (
     <Layout>
       <div className="max-w-4xl mx-auto space-y-6">
@@ -103,8 +147,8 @@ export default function BillDetailPage() {
                   <tr>
                     <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Item</th>
                     <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Qty</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Price</th>
-                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">GST</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Rate</th>
+                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">GST%</th>
                     <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Total</th>
                   </tr>
                 </thead>
@@ -118,7 +162,7 @@ export default function BillDetailPage() {
                       <td className="px-4 py-3 text-sm">{item.quantity} {item.unit}</td>
                       <td className="px-4 py-3 text-sm">₹{parseFloat(item.unit_price || 0).toFixed(2)}</td>
                       <td className="px-4 py-3 text-sm">
-                        {parseFloat(item.gst_rate || 0) > 0 && `${parseFloat(item.gst_rate || 0)}%`}
+                        {parseFloat(item.gst_rate || 0) > 0 ? `${parseFloat(item.gst_rate || 0)}%` : '0%'}
                       </td>
                       <td className="px-4 py-3 text-sm font-medium">₹{parseFloat(item.total_amount || 0).toFixed(2)}</td>
                     </tr>
@@ -130,24 +174,76 @@ export default function BillDetailPage() {
 
           {/* Bill Totals */}
           <div className="border-t border-gray-200 pt-6">
-            <div className="space-y-2 text-right">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Subtotal</span>
-                <span className="font-medium">₹{parseFloat(bill.subtotal || 0).toFixed(2)}</span>
-              </div>
-              {parseFloat(bill.discount_amount || 0) > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Discount</span>
-                  <span className="font-medium">-₹{parseFloat(bill.discount_amount || 0).toFixed(2)}</span>
+            <div className="space-y-3">
+              {/* Summary Stats */}
+              <div className="flex justify-between text-sm text-gray-600 mb-4">
+                <div>
+                  <span>Number of Items: <strong className="text-gray-900">{numItems}</strong></span>
                 </div>
-              )}
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">GST</span>
-                <span className="font-medium">₹{parseFloat(bill.gst_amount || 0).toFixed(2)}</span>
+                <div>
+                  <span>Total Quantity: <strong className="text-gray-900">{totalQty.toFixed(3)}</strong></span>
+                </div>
               </div>
-              <div className="flex justify-between text-xl font-bold border-t border-gray-200 pt-2">
-                <span>Total</span>
-                <span>₹{parseFloat(bill.total_amount || 0).toFixed(2)}</span>
+
+              {/* Amount Breakdown */}
+              <div className="space-y-2 text-right">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Sub Total</span>
+                  <span className="font-medium">₹{subtotal.toFixed(2)}</span>
+                </div>
+                {discount > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">(-) Discount</span>
+                    <span className="font-medium">-₹{discount.toFixed(2)}</span>
+                  </div>
+                )}
+                
+                {/* GST Breakdown by Rate */}
+                {gstRates.map((rate) => {
+                  const rateNum = parseFloat(rate);
+                  const { cgst, sgst, taxable } = gstBreakdown[rateNum];
+                  if (rateNum > 0 && taxable > 0) {
+                    return (
+                      <div key={`gst-${rate}`} className="space-y-1">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">CGST {rateNum.toFixed(2)}% (Taxable ₹{taxable.toFixed(2)})</span>
+                          <span className="font-medium">₹{cgst.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">SGST {rateNum.toFixed(2)}% (Taxable ₹{taxable.toFixed(2)})</span>
+                          <span className="font-medium">₹{sgst.toFixed(2)}</span>
+                        </div>
+                      </div>
+                    );
+                  } else if (rateNum === 0 && taxable > 0) {
+                    return (
+                      <div key={`gst-0`} className="space-y-1">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">CGST 0% (Taxable ₹{taxable.toFixed(2)})</span>
+                          <span className="font-medium">₹0.00</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">SGST 0% (Taxable ₹{taxable.toFixed(2)})</span>
+                          <span className="font-medium">₹0.00</span>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })}
+
+                {/* Round Off */}
+                {Math.abs(roundOff) > 0.01 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Round Off</span>
+                    <span className="font-medium">₹{roundOff > 0 ? '+' : ''}{roundOff.toFixed(2)}</span>
+                  </div>
+                )}
+
+                <div className="flex justify-between text-xl font-bold border-t border-gray-200 pt-2 mt-2">
+                  <span>TOTAL</span>
+                  <span>₹{total.toFixed(2)}</span>
+                </div>
               </div>
             </div>
           </div>

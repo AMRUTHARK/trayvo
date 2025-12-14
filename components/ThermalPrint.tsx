@@ -51,10 +51,11 @@ export default function ThermalPrint({ bill }: ThermalPrintProps) {
     
     items.forEach((item: any) => {
       const gstRate = parseFloat(item.gst_rate || 0);
+      const itemTotal = parseFloat(item.unit_price || 0) * parseFloat(item.quantity || 0);
+      const discount = parseFloat(item.discount_amount || 0);
+      const taxable = itemTotal - discount;
+      
       if (gstRate > 0) {
-        const itemTotal = parseFloat(item.unit_price || 0) * parseFloat(item.quantity || 0);
-        const discount = parseFloat(item.discount_amount || 0);
-        const taxable = itemTotal - discount;
         const cgstRate = gstRate / 2;
         const sgstRate = gstRate / 2;
         const cgst = (taxable * cgstRate) / 100;
@@ -66,6 +67,12 @@ export default function ThermalPrint({ bill }: ThermalPrintProps) {
         gstMap[gstRate].cgst += cgst;
         gstMap[gstRate].sgst += sgst;
         gstMap[gstRate].taxable += taxable;
+      } else {
+        // Track 0% GST items separately
+        if (!gstMap[0]) {
+          gstMap[0] = { cgst: 0, sgst: 0, taxable: 0 };
+        }
+        gstMap[0].taxable += taxable;
       }
     });
 
@@ -139,63 +146,91 @@ export default function ThermalPrint({ bill }: ThermalPrintProps) {
       printContent += '--------------------------------\n';
 
       // Items table header
-      printContent += 'Item                    Qty    Amt\n';
+      printContent += 'Item                    Qty    Rate    Amt\n';
       printContent += '--------------------------------\n';
 
       // Items
       bill.items.forEach((item: any) => {
         const name = item.product_name || '';
         const qty = parseFloat(item.quantity || 0);
+        const rate = parseFloat(item.unit_price || 0);
         const amt = parseFloat(item.total_amount || 0);
-        // Format: Item name (truncated to fit), Qty, Amt
-        const namePart = name.substring(0, 20).padEnd(20);
+        const gstRate = parseFloat(item.gst_rate || 0);
+        // Format: Item name (truncated to fit), Qty, Rate, Amt
+        const namePart = name.substring(0, 18).padEnd(18);
         const qtyPart = String(qty).padStart(5);
+        const ratePart = '₹' + rate.toFixed(2).padStart(6);
         const amtPart = '₹' + amt.toFixed(2).padStart(8);
-        printContent += `${namePart} ${qtyPart} ${amtPart}\n`;
+        printContent += `${namePart} ${qtyPart} ${ratePart} ${amtPart}\n`;
+        // Show GST% if applicable
+        if (gstRate > 0) {
+          printContent += `  GST ${gstRate.toFixed(2)}%\n`;
+        }
       });
 
       printContent += '--------------------------------\n';
 
       // Summary section
       const totalQty = bill.items.reduce((sum: number, item: any) => sum + parseFloat(item.quantity || 0), 0);
+      const numItems = bill.items.length;
       const subtotal = parseFloat(bill.subtotal || 0);
       const discount = parseFloat(bill.discount_amount || 0);
       const gstBreakdown = calculateGSTBreakdown(bill.items);
+      const gstAmount = parseFloat(bill.gst_amount || 0);
+      const totalBeforeRound = subtotal - discount + gstAmount;
+      const total = parseFloat(bill.total_amount || 0);
+      const roundOff = total - totalBeforeRound;
 
-      printContent += `Sub Total:\n`;
-      printContent += `  Qty: ${totalQty}\n`;
-      printContent += `  Amt: ₹${subtotal.toFixed(2)}\n`;
+      printContent += `Sub Total: ₹${subtotal.toFixed(2)}\n`;
       
       if (discount > 0) {
         printContent += `(-) Discount: ₹${discount.toFixed(2)}\n`;
       }
 
-      // GST breakdown by rate
+      // GST breakdown by rate (improved format with taxable amounts)
       const gstRates = Object.keys(gstBreakdown).sort((a, b) => parseFloat(b) - parseFloat(a));
       gstRates.forEach((rate) => {
         const rateNum = parseFloat(rate);
-        const { cgst, sgst } = gstBreakdown[rateNum];
-        printContent += `CGST @ ${rateNum.toFixed(2)}%: ₹${cgst.toFixed(2)}\n`;
-        printContent += `SGST @ ${rateNum.toFixed(2)}%: ₹${sgst.toFixed(2)}\n`;
+        const { cgst, sgst, taxable } = gstBreakdown[rateNum];
+        if (rateNum > 0 && taxable > 0) {
+          printContent += `CGST ${rateNum.toFixed(2)}%: Taxable ₹${taxable.toFixed(2)}, Tax ₹${cgst.toFixed(2)}\n`;
+          printContent += `SGST ${rateNum.toFixed(2)}%: Taxable ₹${taxable.toFixed(2)}, Tax ₹${sgst.toFixed(2)}\n`;
+        }
       });
+
+      // Show 0% GST items if any
+      if (gstBreakdown[0] && gstBreakdown[0].taxable > 0) {
+        printContent += `CGST 0%: Taxable ₹${gstBreakdown[0].taxable.toFixed(2)}, Tax ₹0.00\n`;
+        printContent += `SGST 0%: Taxable ₹${gstBreakdown[0].taxable.toFixed(2)}, Tax ₹0.00\n`;
+      }
+
+      if (Math.abs(roundOff) > 0.01) {
+        printContent += `Round Off: ₹${roundOff > 0 ? '+' : ''}${roundOff.toFixed(2)}\n`;
+      }
 
       printContent += '--------------------------------\n';
 
-      // Final totals
+      // Final totals with number of items and total quantity
+      printContent += ESC + 'a' + '\x00'; // Left align
+      printContent += `Number of Items: ${numItems}\n`;
+      printContent += `Total Quantity: ${totalQty.toFixed(3)}\n`;
       printContent += ESC + 'a' + '\x02'; // Right align
-      const total = parseFloat(bill.total_amount || 0);
       printContent += ESC + '!' + '\x10'; // Double size
-      printContent += `TOTAL: Rs ${total.toFixed(2)}\n`;
+      printContent += `TOTAL: ₹${total.toFixed(2)}\n`;
       printContent += ESC + '!' + '\x00'; // Normal size
       
       const paymentMode = formatPaymentMode(bill.payment_mode);
-      printContent += `${paymentMode}: Rs ${total.toFixed(2)}\n`;
+      printContent += `${paymentMode}: ₹${total.toFixed(2)}\n`;
       if (bill.payment_mode === 'cash') {
-        printContent += `Cash tendered: Rs ${total.toFixed(2)}\n`;
+        printContent += `Cash tendered: ₹${total.toFixed(2)}\n`;
       }
 
       printContent += '--------------------------------\n';
       printContent += ESC + 'a' + '\x01'; // Center align
+      if (shop?.email) {
+        printContent += `Email: ${shop.email}\n`;
+      }
+      printContent += 'Thank You! Do Visit Again!\n';
       printContent += 'E & O.E\n';
       printContent += '\n\n\n';
 
@@ -256,10 +291,15 @@ export default function ThermalPrint({ bill }: ThermalPrintProps) {
     const shopAddress = shop?.address || '';
     const shopPhone = shop?.phone || '';
     const shopGstin = shop?.gstin || '';
+    const shopEmail = shop?.email || '';
     const totalQty = bill.items.reduce((sum: number, item: any) => sum + parseFloat(item.quantity || 0), 0);
+    const numItems = bill.items.length;
     const subtotal = parseFloat(bill.subtotal || 0);
     const discount = parseFloat(bill.discount_amount || 0);
+    const gstAmount = parseFloat(bill.gst_amount || 0);
+    const totalBeforeRound = subtotal - discount + gstAmount;
     const total = parseFloat(bill.total_amount || 0);
+    const roundOff = total - totalBeforeRound;
     const gstBreakdown = calculateGSTBreakdown(bill.items);
     const gstRates = Object.keys(gstBreakdown).sort((a, b) => parseFloat(b) - parseFloat(a));
 
@@ -312,44 +352,63 @@ export default function ThermalPrint({ bill }: ThermalPrintProps) {
               <tr>
                 <th>Item</th>
                 <th class="center">Qty</th>
+                <th class="right">Rate</th>
                 <th class="right">Amt</th>
               </tr>
             </thead>
             <tbody>
-              ${bill.items.map((item: any) => `
+              ${bill.items.map((item: any) => {
+                const gstRate = parseFloat(item.gst_rate || 0);
+                return `
                 <tr>
-                  <td>${item.product_name}</td>
+                  <td>${item.product_name}${gstRate > 0 ? ` <small>(GST ${gstRate.toFixed(2)}%)</small>` : ''}</td>
                   <td class="center">${parseFloat(item.quantity || 0)}</td>
+                  <td class="right">₹${parseFloat(item.unit_price || 0).toFixed(2)}</td>
                   <td class="right">₹${parseFloat(item.total_amount || 0).toFixed(2)}</td>
                 </tr>
-              `).join('')}
+              `;
+              }).join('')}
             </tbody>
           </table>
           <div class="divider"></div>
           <div class="summary">
-            <div><strong>Sub Total:</strong></div>
-            <div class="summary-row">
-              <span>Qty: ${totalQty}</span>
-              <span>Amt: ₹${subtotal.toFixed(2)}</span>
-            </div>
+            <div class="summary-row"><span><strong>Sub Total:</strong></span><span>₹${subtotal.toFixed(2)}</span></div>
             ${discount > 0 ? `<div class="summary-row"><span>(-) Discount:</span><span>₹${discount.toFixed(2)}</span></div>` : ''}
             ${gstRates.map((rate) => {
               const rateNum = parseFloat(rate);
-              const { cgst, sgst } = gstBreakdown[rateNum];
-              return `
-                <div class="summary-row"><span>CGST @ ${rateNum.toFixed(2)}%:</span><span>₹${cgst.toFixed(2)}</span></div>
-                <div class="summary-row"><span>SGST @ ${rateNum.toFixed(2)}%:</span><span>₹${sgst.toFixed(2)}</span></div>
-              `;
+              const { cgst, sgst, taxable } = gstBreakdown[rateNum];
+              if (rateNum > 0 && taxable > 0) {
+                return `
+                  <div class="summary-row"><span>CGST ${rateNum.toFixed(2)}% (Taxable ₹${taxable.toFixed(2)}):</span><span>₹${cgst.toFixed(2)}</span></div>
+                  <div class="summary-row"><span>SGST ${rateNum.toFixed(2)}% (Taxable ₹${taxable.toFixed(2)}):</span><span>₹${sgst.toFixed(2)}</span></div>
+                `;
+              } else if (rateNum === 0 && taxable > 0) {
+                return `
+                  <div class="summary-row"><span>CGST 0% (Taxable ₹${taxable.toFixed(2)}):</span><span>₹0.00</span></div>
+                  <div class="summary-row"><span>SGST 0% (Taxable ₹${taxable.toFixed(2)}):</span><span>₹0.00</span></div>
+                `;
+              }
+              return '';
             }).join('')}
+            ${Math.abs(roundOff) > 0.01 ? `<div class="summary-row"><span>Round Off:</span><span>₹${roundOff > 0 ? '+' : ''}${roundOff.toFixed(2)}</span></div>` : ''}
+          </div>
+          <div class="divider"></div>
+          <div style="margin: 5px 0; font-size: 10px;">
+            <div>Number of Items: ${numItems}</div>
+            <div>Total Quantity: ${totalQty.toFixed(3)}</div>
           </div>
           <div class="divider"></div>
           <div class="total-row right">
-            <div>TOTAL: Rs ${total.toFixed(2)}</div>
-            <div>${formatPaymentMode(bill.payment_mode)}: Rs ${total.toFixed(2)}</div>
-            ${bill.payment_mode === 'cash' ? `<div>Cash tendered: Rs ${total.toFixed(2)}</div>` : ''}
+            <div>TOTAL: ₹${total.toFixed(2)}</div>
+            <div>${formatPaymentMode(bill.payment_mode)}: ₹${total.toFixed(2)}</div>
+            ${bill.payment_mode === 'cash' ? `<div>Cash tendered: ₹${total.toFixed(2)}</div>` : ''}
           </div>
           <div class="divider"></div>
-          <div class="footer">E & O.E</div>
+          <div class="footer">
+            ${shopEmail ? `<div>Email: ${shopEmail}</div>` : ''}
+            <div>Thank You! Do Visit Again!</div>
+            <div>E & O.E</div>
+          </div>
         </body>
       </html>
     `);
