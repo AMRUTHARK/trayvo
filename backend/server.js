@@ -71,16 +71,11 @@ app.use('/api/hold-bills', require('./routes/holdBills'));
 app.use('/api/purchases', require('./routes/purchases'));
 app.use('/api/purchase-returns', require('./routes/purchaseReturns'));
 app.use('/api/sales-returns', require('./routes/salesReturns'));
+app.use('/api/error-logs', require('./routes/errorLogs'));
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error('Error:', err);
-  res.status(err.status || 500).json({
-    success: false,
-    message: err.message || 'Internal server error',
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
-  });
-});
+// Error handling middleware (must be after all routes)
+const errorHandler = require('./middleware/errorHandler');
+app.use(errorHandler);
 
 // 404 handler
 app.use((req, res) => {

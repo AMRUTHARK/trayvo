@@ -53,6 +53,7 @@ export default function Layout({ children }: LayoutProps) {
       { href: '/purchases', label: 'Purchases', icon: '📥' },
       { href: '/reports', label: 'Reports', icon: '📈' },
     ] : []),
+    ...(isSuperAdmin() ? [{ href: '/error-logs', label: 'Error Logs', icon: '🚨' }] : []),
     ...(isAdmin() || isSuperAdmin() ? [{ href: '/settings', label: 'Settings', icon: '⚙️' }] : []),
   ];
 

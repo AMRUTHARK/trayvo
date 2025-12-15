@@ -8,6 +8,7 @@ const pool = require('../config/database');
 const { authenticate } = require('../middleware/auth');
 const { parseUserAgent, getClientIp } = require('../utils/deviceInfo');
 const { sendPasswordResetEmail, isEmailConfigured } = require('../config/email');
+const { logAuthError, logApplicationError } = require('../utils/errorLogger');
 
 const router = express.Router();
 
@@ -399,6 +400,12 @@ router.post('/login', authLimiter, [
       // Log failed login attempt (user not found)
       try {
         await logLoginAttempt(null, normalizedShopId, username, req, 'failed', 'User not found');
+        // Also log as authentication error
+        await logAuthError(
+          new Error(`Login attempt with non-existent username: ${username}${normalizedShopId ? ` (shop_id: ${normalizedShopId})` : ''}`),
+          req,
+          null
+        );
       } catch (logError) {
         console.error('Error logging login attempt:', logError);
       }
@@ -431,6 +438,12 @@ router.post('/login', authLimiter, [
       // Log failed login attempt (wrong password)
       try {
         await logLoginAttempt(user.id, user.shop_id, username, req, 'failed', 'Invalid password');
+        // Also log as authentication error
+        await logAuthError(
+          new Error('Invalid password for user: ' + username),
+          req,
+          { id: user.id, shop_id: user.shop_id }
+        );
       } catch (logError) {
         console.error('Error logging login attempt:', logError);
       }
@@ -484,6 +497,10 @@ router.post('/login', authLimiter, [
       }
     });
   } catch (error) {
+    // Log authentication errors
+    logAuthError(error, req, req.body.username ? { username: req.body.username } : null).catch(logErr => {
+      console.error('Failed to log auth error:', logErr);
+    });
     next(error);
   }
 });
