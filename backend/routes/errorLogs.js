@@ -90,8 +90,8 @@ router.get('/', async (req, res, next) => {
     }
 
     // Order by most recent first
-    query += ' ORDER BY el.created_at DESC LIMIT ? OFFSET ?';
-    params.push(limitNum, offset);
+    // Use template literals for LIMIT and OFFSET to avoid prepared statement issues
+    query += ` ORDER BY el.created_at DESC LIMIT ${limitNum} OFFSET ${offset}`;
 
     const [errors] = await pool.execute(query, params);
 
