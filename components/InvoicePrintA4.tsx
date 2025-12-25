@@ -140,19 +140,14 @@ export default function InvoicePrintA4({ bill, templateConfig }: InvoicePrintA4P
       printWindow.document.open();
       printWindow.document.write(`
         <!DOCTYPE html>
-        <html>
+        <html lang="en">
           <head>
-            <title>Invoice ${bill.bill_number}</title>
+            <meta charset="UTF-8" />
+            <title>Tax Invoice</title>
             <style>
-              @media print {
-                @page { 
-                  size: A4; 
-                  margin: 10mm; 
-                }
-                body { 
-                  margin: 0; 
-                  padding: 0; 
-                }
+              @page {
+                size: A4;
+                margin: 12mm;
               }
               * {
                 margin: 0;
@@ -160,258 +155,153 @@ export default function InvoicePrintA4({ bill, templateConfig }: InvoicePrintA4P
                 box-sizing: border-box;
               }
               body {
-                font-family: Arial, sans-serif;
+                font-family: Arial, Helvetica, sans-serif;
                 font-size: 12px;
-                line-height: 1.5;
                 color: #000;
-                margin: 0;
-                padding: 15mm;
-                width: 210mm;
-                min-height: 297mm;
               }
-              .invoice-container {
-                width: 100%;
+              .invoice {
+                border: 2px solid #000;
+                padding: 10px;
               }
-              
-              /* Header Section */
               .header {
                 display: flex;
                 justify-content: space-between;
-                align-items: flex-start;
-                margin-bottom: 15px;
-                padding-bottom: 10px;
                 border-bottom: 2px solid #000;
+                padding-bottom: 10px;
               }
-              .shop-info {
-                flex: 1;
+              .company-details {
+                width: 70%;
+                line-height: 1.5;
               }
-              .shop-info h1 {
-                font-size: 16px;
+              .company-details strong {
                 font-weight: bold;
-                margin: 0 0 8px 0;
-                text-transform: uppercase;
               }
-              .shop-info p {
-                margin: 2px 0;
-                font-size: 11px;
-                line-height: 1.4;
-              }
-              .logo-container {
-                width: 80px;
-                height: 80px;
+              .logo-box {
+                width: 25%;
+                text-align: center;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                border-radius: 50%;
-                overflow: hidden;
-                background: #fff;
-                flex-shrink: 0;
               }
-              .logo-container img {
+              .logo-box img {
                 max-width: 100%;
-                max-height: 100%;
-                object-fit: contain;
+                height: auto;
+                max-height: 100px;
               }
-              
-              /* Invoice Title */
-              .invoice-title {
+              .title {
                 text-align: center;
-                font-size: 22px;
+                font-size: 18px;
                 font-weight: bold;
-                margin: 15px 0;
-                text-transform: uppercase;
+                margin: 10px 0;
+                border-bottom: 2px solid #000;
+                padding-bottom: 5px;
               }
-              
-              /* Billing Details Section */
-              .details-section {
+              .billing {
                 display: flex;
-                justify-content: space-between;
-                margin-bottom: 15px;
+                border-bottom: 2px solid #000;
               }
-              .billing-box {
-                flex: 1;
-                margin-right: 15px;
+              .billing div {
+                width: 50%;
+                padding: 8px;
+                border-right: 1px solid #000;
               }
-              .shipping-box {
-                flex: 1;
-                margin-right: 15px;
+              .billing div:last-child {
+                border-right: none;
               }
-              .invoice-info-box {
-                flex: 0 0 200px;
-                text-align: right;
-              }
-              .section-heading {
-                font-size: 12px;
+              .billing div strong {
                 font-weight: bold;
-                margin: 0 0 5px 0;
-                text-transform: uppercase;
               }
-              .section-content p {
-                margin: 2px 0;
-                font-size: 11px;
-                line-height: 1.4;
-              }
-              
-              /* Items Table */
               table {
                 width: 100%;
                 border-collapse: collapse;
-                margin: 15px 0;
+                margin-top: 10px;
               }
-              table thead th {
-                background-color: #f5f5f5;
-                padding: 8px 5px;
+              table th, table td {
+                border: 1px solid #000;
+                padding: 6px;
+                text-align: center;
+              }
+              table th {
+                background: #f2f2f2;
+                font-weight: bold;
+              }
+              .text-left {
                 text-align: left;
-                font-weight: bold;
-                font-size: 11px;
+              }
+              .text-right {
+                text-align: right;
+              }
+              .totals {
+                width: 40%;
+                float: right;
+                margin-top: 10px;
+              }
+              .totals table {
+                margin-top: 0;
+              }
+              .totals table td {
                 border: 1px solid #000;
-                text-transform: uppercase;
               }
-              table thead th.text-right {
-                text-align: right;
+              .totals table th {
+                background: #f2f2f2;
               }
-              table thead th.text-center {
-                text-align: center;
-              }
-              table tbody td {
-                padding: 6px 5px;
-                font-size: 11px;
-                border: 1px solid #000;
-              }
-              table tbody td.text-right {
-                text-align: right;
-              }
-              table tbody td.text-center {
-                text-align: center;
-              }
-              
-              /* Totals Section */
-              .totals-section {
-                display: flex;
-                justify-content: flex-end;
-                margin-top: 15px;
-              }
-              .totals-table {
-                width: 280px;
-                border-collapse: collapse;
-              }
-              .totals-table td {
-                padding: 6px 10px;
-                font-size: 11px;
-                border: none;
-              }
-              .totals-table td:first-child {
-                text-align: right;
-                font-weight: bold;
-                padding-right: 15px;
-              }
-              .totals-table td:last-child {
-                text-align: right;
-                font-weight: normal;
-              }
-              .totals-table tr.grand-total td {
-                font-weight: bold;
-                font-size: 12px;
+              .bank {
+                margin-top: 60px;
                 border-top: 2px solid #000;
-                border-bottom: 2px solid #000;
-                padding: 8px 10px;
+                padding-top: 8px;
+                clear: both;
               }
-              .totals-table tr.grand-total td:first-child {
-                padding-right: 15px;
+              .bank strong {
+                font-weight: bold;
               }
-              
-              /* Footer Section */
-              .footer-section {
+              .footer {
+                margin-top: 40px;
                 display: flex;
                 justify-content: space-between;
-                align-items: flex-start;
-                margin-top: 30px;
               }
-              .bank-details {
-                flex: 1;
-              }
-              .bank-details h3 {
-                font-size: 12px;
-                font-weight: bold;
-                margin: 0 0 8px 0;
-                text-transform: uppercase;
-              }
-              .bank-details p {
-                margin: 2px 0;
-                font-size: 11px;
-                line-height: 1.4;
-              }
-              .signature-section {
-                flex: 0 0 180px;
+              .signature {
                 text-align: right;
-              }
-              .signature-line {
-                border-top: 1px solid #000;
-                margin-top: 50px;
-                padding-top: 5px;
-                width: 100%;
-              }
-              .signature-section p {
-                font-size: 11px;
-                margin: 0;
-              }
-              
-              /* Query Contact */
-              .query-contact {
-                margin-top: 20px;
-                text-align: center;
-                font-size: 11px;
-                font-style: italic;
+                margin-top: 40px;
               }
             </style>
           </head>
           <body>
-            <div class="invoice-container">
-              <!-- Header: Shop Info and Logo -->
+            <div class="invoice">
+              <!-- Header -->
               <div class="header">
-                <div class="shop-info">
-                  <h1>${(shop.shop_name || '').toUpperCase()}</h1>
-                  ${shop.address ? `<p>${shop.address}</p>` : ''}
-                  ${shop.phone ? `<p>Phone No.: ${shop.phone}</p>` : ''}
-                  ${shop.email ? `<p>Email ID: ${shop.email}</p>` : ''}
-                  ${shop.gstin ? `<p>GSTIN: ${shop.gstin}</p>` : ''}
-                  ${shop.state ? `<p>State: ${shop.state.toUpperCase()}</p>` : ''}
+                <div class="company-details">
+                  <strong>${(shop.shop_name || '').toUpperCase()}</strong><br>
+                  ${shop.address ? (typeof shop.address === 'string' ? shop.address.replace(/\\n/g, '<br>') : shop.address) + '<br>' : ''}
+                  ${shop.phone ? `Phone: ${shop.phone}<br>` : ''}
+                  ${shop.email ? `Email: ${shop.email}<br>` : ''}
+                  ${shop.gstin ? `GSTIN: ${shop.gstin}<br>` : ''}
+                  ${shop.state ? `State: ${shop.state}` : ''}
                 </div>
                 ${shop.logo_url ? `
-                  <div class="logo-container">
-                    <img src="${shop.logo_url}" alt="Logo" />
+                  <div class="logo-box">
+                    <img src="${shop.logo_url}" alt="Company Logo">
                   </div>
-                ` : ''}
+                ` : '<div class="logo-box"></div>'}
               </div>
 
-              <!-- Invoice Title -->
-              <div class="invoice-title">TAX Invoice</div>
+              <!-- Title -->
+              <div class="title">TAX INVOICE</div>
 
-              <!-- Billing, Shipping, and Invoice Details -->
-              <div class="details-section">
-                <div class="billing-box">
-                  <div class="section-heading">Bill To:</div>
-                  <div class="section-content">
-                    ${bill.customer_name ? `<p>${bill.customer_name}</p>` : ''}
-                    ${bill.customer_address ? `<p>${bill.customer_address}</p>` : ''}
-                    ${bill.customer_phone ? `<p>Contact No.: ${bill.customer_phone}</p>` : '<p>Contact No.: </p>'}
-                    ${bill.customer_gstin ? `<p>GSTIN No.: ${bill.customer_gstin}</p>` : '<p>GSTIN No.: </p>'}
-                    ${shop.state ? `<p>${shop.state.toUpperCase()}</p>` : ''}
-                  </div>
+              <!-- Billing -->
+              <div class="billing">
+                <div>
+                  <strong>Bill To:</strong><br>
+                  ${bill.customer_name || ''}<br>
+                  ${bill.customer_address ? (typeof bill.customer_address === 'string' ? bill.customer_address.replace(/\\n/g, '<br>') : bill.customer_address) + '<br>' : ''}
+                  ${bill.customer_phone ? `Contact: ${bill.customer_phone}<br>` : ''}
+                  ${bill.customer_gstin ? `GSTIN: ${bill.customer_gstin}<br>` : 'GSTIN:<br>'}
+                  ${shop.state ? `State: ${shop.state}` : 'State:'}
                 </div>
-                <div class="shipping-box">
-                  <div class="section-heading">Shipping To:</div>
-                  <div class="section-content">
-                    ${bill.shipping_address || bill.customer_address ? `
-                      <p>${bill.shipping_address || bill.customer_address}</p>
-                    ` : ''}
-                  </div>
-                </div>
-                <div class="invoice-info-box">
-                  <div class="section-content">
-                    <p><strong>Invoice No.:</strong> ${bill.bill_number}</p>
-                    <p><strong>Date:</strong> ${formatDate(bill.created_at)}</p>
-                  </div>
+                <div>
+                  <strong>Invoice No:</strong> ${bill.bill_number}<br>
+                  <strong>Date:</strong> ${formatDate(bill.created_at)}<br><br>
+                  <strong>Shipping To:</strong><br>
+                  ${bill.shipping_address || bill.customer_address ? (typeof (bill.shipping_address || bill.customer_address) === 'string' ? (bill.shipping_address || bill.customer_address).replace(/\\n/g, '<br>') : (bill.shipping_address || bill.customer_address)) + '<br>' : ''}
                 </div>
               </div>
 
@@ -420,11 +310,11 @@ export default function InvoicePrintA4({ bill, templateConfig }: InvoicePrintA4P
                 <thead>
                   <tr>
                     <th>SL NO</th>
-                    <th>ITEMS</th>
+                    <th class="text-left">ITEMS</th>
                     <th>HSN</th>
-                    <th class="text-right">UNIT PRICE</th>
-                    <th class="text-center">QUANTITY</th>
-                    <th class="text-right">AMOUNT</th>
+                    <th>UNIT PRICE</th>
+                    <th>QTY</th>
+                    <th>AMOUNT</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -432,67 +322,63 @@ export default function InvoicePrintA4({ bill, templateConfig }: InvoicePrintA4P
                     const itemAmount = parseFloat(item.unit_price || 0) * parseFloat(item.quantity || 0);
                     return `
                       <tr>
-                        <td class="text-center">${index + 1}</td>
-                        <td>${item.product_name}</td>
-                        <td class="text-center">${item.hsn_code || '-'}</td>
-                        <td class="text-right">${formatCurrency(item.unit_price)}</td>
-                        <td class="text-center">${formatQuantity(item.quantity)}</td>
-                        <td class="text-right">${formatCurrency(itemAmount)}</td>
+                        <td>${index + 1}</td>
+                        <td class="text-left">${item.product_name}</td>
+                        <td>${item.hsn_code || '-'}</td>
+                        <td class="text-right">${parseFloat(item.unit_price || 0).toFixed(2)}</td>
+                        <td>${parseFloat(item.quantity || 0).toFixed(0)}</td>
+                        <td class="text-right">${itemAmount.toFixed(2)}</td>
                       </tr>
                     `;
                   }).join('')}
                 </tbody>
               </table>
 
-              <!-- Totals Section -->
-              <div class="totals-section">
-                <table class="totals-table">
+              <!-- Totals -->
+              <div class="totals">
+                <table>
                   <tr>
-                    <td>TOTAL:</td>
-                    <td>${formatCurrency(totalTaxable)}</td>
+                    <td>Total</td>
+                    <td class="text-right">${totalTaxable.toFixed(2)}</td>
                   </tr>
                   ${totalSGST > 0 ? `
                     <tr>
-                      <td>SGST ${sgstRate.toFixed(1)}%:</td>
-                      <td>${formatCurrency(totalSGST)}</td>
+                      <td>SGST (${sgstRate.toFixed(1)}%)</td>
+                      <td class="text-right">${totalSGST.toFixed(2)}</td>
                     </tr>
                   ` : ''}
                   ${totalCGST > 0 ? `
                     <tr>
-                      <td>CGST ${cgstRate.toFixed(1)}%:</td>
-                      <td>${formatCurrency(totalCGST)}</td>
+                      <td>CGST (${cgstRate.toFixed(1)}%)</td>
+                      <td class="text-right">${totalCGST.toFixed(2)}</td>
                     </tr>
                   ` : ''}
-                  <tr class="grand-total">
-                    <td>GRAND TOTAL:</td>
-                    <td>${formatCurrency(grandTotal)}</td>
+                  <tr>
+                    <th>Grand Total</th>
+                    <th class="text-right">${grandTotal.toFixed(2)}</th>
                   </tr>
                 </table>
               </div>
 
-              <!-- Footer: Bank Details and Signature -->
-              <div class="footer-section">
-                ${(shop.bank_name || shop.account_number) ? `
-                  <div class="bank-details">
-                    <h3>BANK DETAILS</h3>
-                    ${shop.bank_name ? `<p>${shop.bank_name.toUpperCase()}</p>` : ''}
-                    ${shop.bank_branch ? `<p>${shop.bank_branch.toUpperCase()}</p>` : ''}
-                    ${shop.account_number ? `<p>ACCOUNT NO: ${shop.account_number}</p>` : ''}
-                    ${shop.ifsc_code ? `<p>IFSC CODE: ${shop.ifsc_code}</p>` : ''}
-                  </div>
-                ` : '<div></div>'}
-                <div class="signature-section">
-                  <div class="signature-line"></div>
-                  <p>Signature</p>
-                </div>
-              </div>
-
-              <!-- Query Contact Footer -->
-              ${shop.email ? `
-                <div class="query-contact">
-                  In the case of any queries write us to ${shop.email}
+              <!-- Bank -->
+              ${(shop.bank_name || shop.account_number) ? `
+                <div class="bank">
+                  <strong>Bank Details</strong><br>
+                  ${shop.bank_name ? `Bank Name: ${shop.bank_name}<br>` : ''}
+                  ${shop.account_number ? `Account No: ${shop.account_number}<br>` : ''}
+                  ${shop.ifsc_code ? `IFSC: ${shop.ifsc_code}` : ''}
                 </div>
               ` : ''}
+
+              <!-- Footer -->
+              <div class="footer">
+                <div>
+                  ${shop.email ? `In case of any queries write to ${shop.email}` : ''}
+                </div>
+                <div class="signature">
+                  Authorized Signature
+                </div>
+              </div>
             </div>
           </body>
         </html>
