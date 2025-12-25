@@ -619,7 +619,7 @@ export default function SettingsPage() {
               <button
                 onClick={() => {
                   // Future: Open template customization modal
-                  toast.info('Template customization coming soon');
+                  toast('Template customization coming soon', { icon: 'ℹ️' });
                 }}
                 className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
               >
