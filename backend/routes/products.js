@@ -36,7 +36,7 @@ router.get('/', async (req, res, next) => {
     let query = `
       SELECT p.id, p.name, p.sku, p.barcode, p.unit, p.cost_price, p.selling_price, 
              p.gst_rate, p.stock_quantity, p.min_stock_level, p.description, 
-             p.image_url, p.is_active, p.created_at, p.updated_at,
+             p.hsn_code, p.image_url, p.is_active, p.created_at, p.updated_at,
              c.id as category_id, c.name as category_name
       FROM products p
       LEFT JOIN categories c ON p.category_id = c.id
@@ -141,7 +141,7 @@ router.get('/:id', async (req, res, next) => {
     const [products] = await pool.execute(
       `SELECT p.id, p.name, p.sku, p.barcode, p.unit, p.cost_price, p.selling_price, 
               p.gst_rate, p.stock_quantity, p.min_stock_level, p.description, 
-              p.image_url, p.is_active, p.created_at, p.updated_at,
+              p.hsn_code, p.image_url, p.is_active, p.created_at, p.updated_at,
               c.id as category_id, c.name as category_name
        FROM products p
        LEFT JOIN categories c ON p.category_id = c.id
@@ -187,7 +187,7 @@ router.post('/', [
     }
 
     const {
-      name, sku, barcode, category_id, unit, cost_price, selling_price,
+      name, sku, hsn_code, barcode, category_id, unit, cost_price, selling_price,
       gst_rate, stock_quantity, min_stock_level, description, image_url
     } = req.body;
 
@@ -222,12 +222,12 @@ router.post('/', [
     // Stock quantity is always set to 0 - stock must be added via Purchase module or Inventory Adjustment
     // This ensures all stock movements are properly tracked with supplier information and purchase records
     const [result] = await pool.execute(
-      `INSERT INTO products (shop_id, category_id, name, sku, barcode, unit, cost_price, 
+      `INSERT INTO products (shop_id, category_id, name, sku, hsn_code, barcode, unit, cost_price, 
                             selling_price, gst_rate, stock_quantity, min_stock_level, 
                             description, image_url, is_active)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, TRUE)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, TRUE)`,
       [
-        req.shopId, category_id || null, name, sku, barcode || null,
+        req.shopId, category_id || null, name, sku, hsn_code || null, barcode || null,
         unit || 'pcs', cost_price, selling_price, gst_rate || 0,
         min_stock_level || 0, description || null, image_url || null
       ]
@@ -262,7 +262,7 @@ router.put('/:id', [
 
     const { id } = req.params;
     const {
-      name, sku, barcode, category_id, unit, cost_price, selling_price,
+      name, sku, hsn_code, barcode, category_id, unit, cost_price, selling_price,
       gst_rate, min_stock_level, description, image_url, is_active
     } = req.body;
 
@@ -314,6 +314,7 @@ router.put('/:id', [
 
     if (name) updateFields.push('name = ?'), updateValues.push(name);
     if (sku) updateFields.push('sku = ?'), updateValues.push(sku);
+    if (hsn_code !== undefined) updateFields.push('hsn_code = ?'), updateValues.push(hsn_code || null);
     if (barcode !== undefined) updateFields.push('barcode = ?'), updateValues.push(barcode || null);
     if (category_id !== undefined) updateFields.push('category_id = ?'), updateValues.push(category_id || null);
     if (unit) updateFields.push('unit = ?'), updateValues.push(unit);

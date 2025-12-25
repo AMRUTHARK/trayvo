@@ -7,6 +7,7 @@ import api from '@/lib/api';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import ThermalPrint from '@/components/ThermalPrint';
+import InvoicePrintA4 from '@/components/InvoicePrintA4';
 import { formatCurrency, formatQuantity, formatPercentage } from '@/lib/format';
 
 export default function BillDetailPage() {
@@ -101,6 +102,7 @@ export default function BillDetailPage() {
           <h1 className="text-3xl font-bold text-gray-900">Bill Details</h1>
           <div className="flex gap-3">
             <ThermalPrint bill={bill} />
+            <InvoicePrintA4 bill={bill} />
             <button
               onClick={() => router.push('/bills')}
               className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"

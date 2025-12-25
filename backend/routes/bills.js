@@ -3,31 +3,109 @@ const { body, validationResult } = require('express-validator');
 const pool = require('../config/database');
 const { authenticate } = require('../middleware/auth');
 const shopIsolation = require('../middleware/shopIsolation');
+const { logError, logDatabaseError } = require('../utils/errorLogger');
 
 const router = express.Router();
 
 router.use(authenticate);
 router.use(shopIsolation);
 
-// Generate unique bill number
-async function generateBillNumber(shopId) {
-  const today = new Date();
-  const dateStr = today.toISOString().split('T')[0].replace(/-/g, '');
+// Generate unique bill number using shop's invoice number pattern
+async function generateBillNumber(shopId, connection = null) {
+  const dbConnection = connection || pool;
   
-  const [lastBill] = await pool.execute(
-    `SELECT bill_number FROM bills 
-     WHERE shop_id = ? AND bill_number LIKE ? 
-     ORDER BY id DESC LIMIT 1`,
-    [shopId, `BILL-${dateStr}-%`]
-  );
+  try {
+    // Get shop's invoice number configuration
+    const [shops] = await dbConnection.execute(
+      `SELECT invoice_number_prefix, invoice_number_pattern, invoice_sequence_number 
+       FROM shops WHERE id = ?`,
+      [shopId]
+    );
 
-  let sequence = 1;
-  if (lastBill.length > 0) {
-    const lastSeq = parseInt(lastBill[0].bill_number.split('-')[2]) || 0;
-    sequence = lastSeq + 1;
+    if (!shops.length) {
+      throw new Error('Shop not found');
+    }
+
+    const shop = shops[0];
+    const prefix = shop.invoice_number_prefix || 'BILL';
+    const pattern = shop.invoice_number_pattern || '{PREFIX}-{DATE}-{SEQUENCE}';
+    let sequenceNumber = shop.invoice_sequence_number || 0;
+
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const dateStr = `${year}${month}${day}`;
+    const dateStrWithDashes = `${day}-${month}-${year}`;
+
+    // Generate invoice number based on pattern
+    sequenceNumber += 1;
+    let invoiceNumber = pattern
+      .replace(/{PREFIX}/g, prefix)
+      .replace(/{DATE}/g, dateStr)
+      .replace(/{YEAR}/g, year)
+      .replace(/{MONTH}/g, month)
+      .replace(/{DAY}/g, day)
+      .replace(/{SEQUENCE}/g, sequenceNumber)
+      .replace(/{SEQUENCE4}/g, sequenceNumber.toString().padStart(4, '0'))
+      .replace(/{SEQUENCE3}/g, sequenceNumber.toString().padStart(3, '0'))
+      .replace(/{SEQUENCE2}/g, sequenceNumber.toString().padStart(2, '0'));
+
+    // Check if invoice number already exists (handle collisions)
+    let attempts = 0;
+    const maxAttempts = 100;
+    while (attempts < maxAttempts) {
+      const [existing] = await dbConnection.execute(
+        'SELECT id FROM bills WHERE shop_id = ? AND bill_number = ?',
+        [shopId, invoiceNumber]
+      );
+
+      if (existing.length === 0) {
+        // Update shop's sequence number
+        await dbConnection.execute(
+          'UPDATE shops SET invoice_sequence_number = ? WHERE id = ?',
+          [sequenceNumber, shopId]
+        );
+        return invoiceNumber;
+      }
+
+      // Collision detected, increment and try again
+      sequenceNumber += 1;
+      invoiceNumber = pattern
+        .replace(/{PREFIX}/g, prefix)
+        .replace(/{DATE}/g, dateStr)
+        .replace(/{YEAR}/g, year)
+        .replace(/{MONTH}/g, month)
+        .replace(/{DAY}/g, day)
+        .replace(/{SEQUENCE}/g, sequenceNumber)
+        .replace(/{SEQUENCE4}/g, sequenceNumber.toString().padStart(4, '0'))
+        .replace(/{SEQUENCE3}/g, sequenceNumber.toString().padStart(3, '0'))
+        .replace(/{SEQUENCE2}/g, sequenceNumber.toString().padStart(2, '0'));
+      attempts++;
+    }
+
+    throw new Error('Failed to generate unique invoice number after multiple attempts');
+  } catch (error) {
+    // Fallback to default pattern if anything fails
+    console.error('Error generating invoice number with pattern, using fallback:', error);
+    const today = new Date();
+    const dateStr = today.toISOString().split('T')[0].replace(/-/g, '');
+    
+    const [lastBill] = await dbConnection.execute(
+      `SELECT bill_number FROM bills 
+       WHERE shop_id = ? AND bill_number LIKE ? 
+       ORDER BY id DESC LIMIT 1`,
+      [shopId, `BILL-${dateStr}-%`]
+    );
+
+    let sequence = 1;
+    if (lastBill.length > 0) {
+      const lastSeq = parseInt(lastBill[0].bill_number.split('-')[2]) || 0;
+      sequence = lastSeq + 1;
+    }
+
+    return `BILL-${dateStr}-${sequence.toString().padStart(4, '0')}`;
   }
-
-  return `BILL-${dateStr}-${sequence.toString().padStart(4, '0')}`;
 }
 
 // Get all bills with filters
@@ -139,7 +217,7 @@ router.get('/:id', async (req, res, next) => {
     }
 
     const [items] = await pool.execute(
-      `SELECT bi.*, p.name as product_name, p.sku, p.unit
+      `SELECT bi.*, p.name as product_name, p.sku, p.unit, COALESCE(bi.hsn_code, p.hsn_code) as hsn_code
        FROM bill_items bi
        JOIN products p ON bi.product_id = p.id
        WHERE bi.bill_id = ?
@@ -177,7 +255,8 @@ router.post('/', [
     }
 
     const {
-      customer_name, customer_phone, customer_email,
+      customer_name, customer_phone, customer_email, customer_gstin, customer_address,
+      shipping_address,
       items, discount_amount, discount_percent,
       payment_mode, payment_details, notes,
       include_gst = true  // Default to true for backward compatibility
@@ -187,8 +266,8 @@ router.post('/', [
     await connection.beginTransaction();
 
     try {
-      // Generate bill number
-      const billNumber = await generateBillNumber(req.shopId);
+      // Generate bill number using shop's pattern
+      const billNumber = await generateBillNumber(req.shopId, connection);
 
       // Calculate totals
       let subtotal = 0;
@@ -197,21 +276,41 @@ router.post('/', [
 
       for (const item of items) {
         const [products] = await connection.execute(
-          `SELECT id, name, sku, unit, selling_price, gst_rate, stock_quantity 
+          `SELECT id, name, sku, hsn_code, unit, selling_price, gst_rate, stock_quantity 
            FROM products 
            WHERE id = ? AND shop_id = ? AND is_active = TRUE`,
           [item.product_id, req.shopId]
         );
 
         if (!products.length) {
-          throw new Error(`Product ${item.product_id} not found`);
+          const error = new Error(`Product ${item.product_id} not found`);
+          await logError({
+            error_type: 'bill_generation',
+            error_level: 'error',
+            error_message: `Product not found during bill creation: ${item.product_id}`,
+            error_stack: error.stack,
+            request: req,
+            user: req.user,
+            notes: `Shop ID: ${req.shopId}, Bill Number: ${billNumber || 'N/A'}`
+          });
+          throw error;
         }
 
         const product = products[0];
 
         // Check stock availability
         if (parseFloat(product.stock_quantity) < parseFloat(item.quantity)) {
-          throw new Error(`Insufficient stock for ${product.name}. Available: ${product.stock_quantity}`);
+          const error = new Error(`Insufficient stock for ${product.name}. Available: ${product.stock_quantity}`);
+          await logError({
+            error_type: 'bill_generation',
+            error_level: 'warning',
+            error_message: `Insufficient stock for product ${product.name} (ID: ${product.id})`,
+            error_stack: error.stack,
+            request: req,
+            user: req.user,
+            notes: `Available: ${product.stock_quantity}, Requested: ${item.quantity}, Shop ID: ${req.shopId}`
+          });
+          throw error;
         }
 
         const unitPrice = parseFloat(product.selling_price);
@@ -230,6 +329,7 @@ router.post('/', [
           product_id: product.id,
           product_name: product.name,
           sku: product.sku,
+          hsn_code: product.hsn_code || null,
           quantity,
           unit: product.unit,
           unit_price: unitPrice,
@@ -249,15 +349,18 @@ router.post('/', [
       const roundedTotal = Math.round(totalBeforeRound);
       const roundOff = roundedTotal - totalBeforeRound;
 
-      // Create bill
+      // Create bill with new fields
       const [billResult] = await connection.execute(
         `INSERT INTO bills (shop_id, bill_number, user_id, customer_name, customer_phone, 
-                          customer_email, subtotal, discount_amount, discount_percent, 
+                          customer_email, customer_gstin, customer_address, shipping_address,
+                          subtotal, discount_amount, discount_percent, 
                           gst_amount, total_amount, round_off, payment_mode, payment_details, notes, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed')`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed')`,
         [
           req.shopId, billNumber, req.user.id,
           customer_name || null, customer_phone || null, customer_email || null,
+          customer_gstin || null, customer_address || null,
+          shipping_address || customer_address || null, // Default shipping to customer address if not provided
           subtotal, billDiscountAmount, discount_percent || 0,
           totalGst, roundedTotal, roundOff, payment_mode,
           payment_details ? JSON.stringify(payment_details) : null,
@@ -270,11 +373,11 @@ router.post('/', [
       // Create bill items and update stock
       for (const item of billItems) {
         await connection.execute(
-          `INSERT INTO bill_items (bill_id, product_id, product_name, sku, quantity, unit, 
+          `INSERT INTO bill_items (bill_id, product_id, product_name, sku, hsn_code, quantity, unit, 
                                   unit_price, gst_rate, gst_amount, discount_amount, total_amount)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
-            billId, item.product_id, item.product_name, item.sku,
+            billId, item.product_id, item.product_name, item.sku, item.hsn_code || null,
             item.quantity, item.unit, item.unit_price, item.gst_rate,
             item.gst_amount, item.discount_amount, item.total_amount
           ]
@@ -311,7 +414,7 @@ router.post('/', [
       await connection.commit();
       connection.release();
 
-      // Fetch complete bill data
+      // Fetch complete bill data with items
       const [completeBill] = await pool.execute(
         `SELECT b.*, u.username as cashier_name 
          FROM bills b

@@ -33,7 +33,14 @@ export default function SettingsPage() {
     email: '',
     phone: '',
     address: '',
+    state: '',
     gstin: '',
+    bank_name: '',
+    bank_branch: '',
+    account_number: '',
+    ifsc_code: '',
+    invoice_number_prefix: 'BILL',
+    invoice_number_pattern: '{PREFIX}-{DATE}-{SEQUENCE}',
     printer_type: '58mm',
     logo_url: '',
   });
@@ -100,7 +107,14 @@ export default function SettingsPage() {
         email: shopRes.data.data.email || '',
         phone: shopRes.data.data.phone || '',
         address: shopRes.data.data.address || '',
+        state: shopRes.data.data.state || '',
         gstin: shopRes.data.data.gstin || '',
+        bank_name: shopRes.data.data.bank_name || '',
+        bank_branch: shopRes.data.data.bank_branch || '',
+        account_number: shopRes.data.data.account_number || '',
+        ifsc_code: shopRes.data.data.ifsc_code || '',
+        invoice_number_prefix: shopRes.data.data.invoice_number_prefix || 'BILL',
+        invoice_number_pattern: shopRes.data.data.invoice_number_pattern || '{PREFIX}-{DATE}-{SEQUENCE}',
         printer_type: shopRes.data.data.printer_type || '58mm',
         logo_url: shopRes.data.data.logo_url || '',
       });
@@ -398,6 +412,16 @@ export default function SettingsPage() {
                 />
               </div>
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+                <input
+                  type="text"
+                  value={formData.state}
+                  onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
+                  placeholder="e.g., KERALA"
+                />
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">GSTIN</label>
                 <input
                   type="text"
@@ -432,6 +456,82 @@ export default function SettingsPage() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
                 rows={3}
               />
+            </div>
+            
+            {/* Bank Details */}
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Bank Details</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Bank Name</label>
+                  <input
+                    type="text"
+                    value={formData.bank_name}
+                    onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Branch</label>
+                  <input
+                    type="text"
+                    value={formData.bank_branch}
+                    onChange={(e) => setFormData({ ...formData, bank_branch: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Account Number</label>
+                  <input
+                    type="text"
+                    value={formData.account_number}
+                    onChange={(e) => setFormData({ ...formData, account_number: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">IFSC Code</label>
+                  <input
+                    type="text"
+                    value={formData.ifsc_code}
+                    onChange={(e) => setFormData({ ...formData, ifsc_code: e.target.value.toUpperCase() })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
+                    style={{ textTransform: 'uppercase' }}
+                  />
+                </div>
+              </div>
+            </div>
+            
+            {/* Invoice Number Format */}
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Invoice Number Format</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Prefix</label>
+                  <input
+                    type="text"
+                    value={formData.invoice_number_prefix}
+                    onChange={(e) => setFormData({ ...formData, invoice_number_prefix: e.target.value.toUpperCase() })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
+                    style={{ textTransform: 'uppercase' }}
+                    placeholder="BILL"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Used as {`{PREFIX}`} in pattern</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Pattern</label>
+                  <select
+                    value={formData.invoice_number_pattern}
+                    onChange={(e) => setFormData({ ...formData, invoice_number_pattern: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900"
+                  >
+                    <option value="{PREFIX}-{DATE}-{SEQUENCE}">{`{PREFIX}-{DATE}-{SEQUENCE}`} (e.g., BILL-20241216-0001)</option>
+                    <option value="{PREFIX}{YEAR}{MONTH}-{SEQUENCE}">{`{PREFIX}{YEAR}{MONTH}-{SEQUENCE}`} (e.g., INV202412-001)</option>
+                    <option value="{PREFIX}-{SEQUENCE}">{`{PREFIX}-{SEQUENCE}`} (e.g., TVMDEC-19)</option>
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">Available: {`{PREFIX}, {DATE}, {YEAR}, {MONTH}, {DAY}, {SEQUENCE}, {SEQUENCE4}`}</p>
+                </div>
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Shop Logo</label>
@@ -486,6 +586,47 @@ export default function SettingsPage() {
               Save Changes
             </button>
           </form>
+        </div>
+
+        {/* Invoice & Billing Settings */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-4">Invoice & Billing Settings</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Configure invoice templates and formatting. Default templates are automatically created for your shop.
+          </p>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Default Invoice Template
+              </label>
+              <p className="text-xs text-gray-500 mb-2">
+                Choose the default template for invoices. You can select different templates when printing.
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 border border-gray-300 rounded-lg">
+                  <h4 className="font-semibold mb-2">Thermal Receipt</h4>
+                  <p className="text-xs text-gray-600 mb-2">Quick receipt format for thermal printers</p>
+                  <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Default for Thermal</span>
+                </div>
+                <div className="p-4 border border-gray-300 rounded-lg">
+                  <h4 className="font-semibold mb-2">A4 Professional</h4>
+                  <p className="text-xs text-gray-600 mb-2">Full tax invoice format for A4 printing</p>
+                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Default for A4</span>
+                </div>
+              </div>
+            </div>
+            <div className="pt-4 border-t border-gray-200">
+              <button
+                onClick={() => {
+                  // Future: Open template customization modal
+                  toast.info('Template customization coming soon');
+                }}
+                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+              >
+                Customize Templates (Coming Soon)
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* GST Rates Configuration Button */}

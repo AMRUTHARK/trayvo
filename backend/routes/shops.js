@@ -14,7 +14,11 @@ router.use(shopIsolation);
 router.get('/', async (req, res, next) => {
   try {
     const [shops] = await pool.execute(
-      'SELECT id, shop_name, owner_name, email, phone, address, gstin, gst_rates, logo_url, printer_type, printer_config, created_at FROM shops WHERE id = ?',
+      `SELECT id, shop_name, owner_name, email, phone, address, state, gstin, 
+       bank_name, bank_branch, account_number, ifsc_code,
+       invoice_number_prefix, invoice_number_pattern, invoice_sequence_number,
+       gst_rates, logo_url, printer_type, printer_config, created_at 
+       FROM shops WHERE id = ?`,
       [req.shopId]
     );
 
@@ -57,7 +61,14 @@ router.put('/', authorize('admin'), [
   body('email').optional().isEmail(),
   body('phone').optional().trim(),
   body('address').optional().trim(),
+  body('state').optional().trim(),
   body('gstin').optional().trim().isLength({ max: 15 }),
+  body('bank_name').optional().trim(),
+  body('bank_branch').optional().trim(),
+  body('account_number').optional().trim(),
+  body('ifsc_code').optional().trim().isLength({ max: 20 }),
+  body('invoice_number_prefix').optional().trim().isLength({ max: 20 }),
+  body('invoice_number_pattern').optional().trim().isLength({ max: 100 }),
   body('printer_type').optional().isIn(['58mm', '80mm'])
 ], async (req, res, next) => {
   try {
@@ -70,7 +81,10 @@ router.put('/', authorize('admin'), [
       });
     }
 
-    const { shop_name, owner_name, email, phone, address, gstin, printer_type, printer_config, logo_url, gst_rates } = req.body;
+    const { shop_name, owner_name, email, phone, address, state, gstin, 
+            bank_name, bank_branch, account_number, ifsc_code,
+            invoice_number_prefix, invoice_number_pattern,
+            printer_type, printer_config, logo_url, gst_rates } = req.body;
 
     const updateFields = [];
     const updateValues = [];
@@ -95,9 +109,45 @@ router.put('/', authorize('admin'), [
       updateFields.push('address = ?');
       updateValues.push(address || null);
     }
+    if (state !== undefined) {
+      updateFields.push('state = ?');
+      updateValues.push(state || null);
+    }
     if (gstin !== undefined) {
       updateFields.push('gstin = ?');
       updateValues.push(gstin || null);
+    }
+    if (bank_name !== undefined) {
+      updateFields.push('bank_name = ?');
+      updateValues.push(bank_name || null);
+    }
+    if (bank_branch !== undefined) {
+      updateFields.push('bank_branch = ?');
+      updateValues.push(bank_branch || null);
+    }
+    if (account_number !== undefined) {
+      updateFields.push('account_number = ?');
+      updateValues.push(account_number || null);
+    }
+    if (ifsc_code !== undefined) {
+      updateFields.push('ifsc_code = ?');
+      updateValues.push(ifsc_code || null);
+    }
+    if (invoice_number_prefix !== undefined) {
+      updateFields.push('invoice_number_prefix = ?');
+      updateValues.push(invoice_number_prefix || 'BILL');
+    }
+    if (invoice_number_pattern !== undefined) {
+      // Validate pattern contains required placeholders
+      const pattern = invoice_number_pattern || '{PREFIX}-{DATE}-{SEQUENCE}';
+      if (!pattern.includes('{PREFIX}') && !pattern.includes('{SEQUENCE}')) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invoice number pattern must contain at least {PREFIX} or {SEQUENCE}'
+        });
+      }
+      updateFields.push('invoice_number_pattern = ?');
+      updateValues.push(pattern);
     }
     if (printer_type) {
       updateFields.push('printer_type = ?');
