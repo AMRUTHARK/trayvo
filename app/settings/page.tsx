@@ -55,6 +55,10 @@ export default function SettingsPage() {
     { value: '28', label: '28% (Luxury Goods)' },
   ];
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [defaultThermalTemplate, setDefaultThermalTemplate] = useState<number | null>(null);
+  const [defaultA4Template, setDefaultA4Template] = useState<number | null>(null);
+  const [settingDefaultTemplate, setSettingDefaultTemplate] = useState<number | null>(null);
   // For cashiers and superadmins: only allow editing own username/password
   const [profileForm, setProfileForm] = useState({
     username: '',
@@ -95,12 +99,24 @@ export default function SettingsPage() {
 
   const fetchData = async () => {
     try {
-      const [shopRes, usersRes] = await Promise.all([
+      const [shopRes, usersRes, templatesRes] = await Promise.all([
         api.get('/shops'),
         api.get('/shops/users'),
+        api.get('/invoice-templates').catch(() => ({ data: { data: [] } })), // Fetch templates, handle if endpoint doesn't exist
       ]);
       setShop(shopRes.data.data);
       setUsers(usersRes.data.data || []);
+      
+      // Process templates
+      const templatesList = templatesRes.data.data || [];
+      setTemplates(templatesList);
+      
+      // Find default templates
+      const thermalDefault = templatesList.find((t: any) => t.template_type === 'thermal' && t.is_default_for_type);
+      const a4Default = templatesList.find((t: any) => t.template_type === 'a4' && t.is_default_for_type);
+      
+      setDefaultThermalTemplate(thermalDefault?.id || null);
+      setDefaultA4Template(a4Default?.id || null);
       setFormData({
         shop_name: shopRes.data.data.shop_name || '',
         owner_name: shopRes.data.data.owner_name || '',
@@ -244,6 +260,34 @@ export default function SettingsPage() {
       fetchData(); // Refresh data to show updated state
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Failed to update GST rates');
+    }
+  };
+
+  const handleSetDefaultTemplate = async (templateId: number, templateType: 'thermal' | 'a4') => {
+    if (settingDefaultTemplate === templateId) return; // Prevent double-clicking
+    
+    try {
+      setSettingDefaultTemplate(templateId);
+      
+      await api.post(`/invoice-templates/${templateId}/set-default`);
+      
+      toast.success(`${templateType === 'thermal' ? 'Thermal' : 'A4'} template set as default successfully`);
+      
+      // Refresh templates to update UI
+      const templatesRes = await api.get('/invoice-templates');
+      const templatesList = templatesRes.data.data || [];
+      setTemplates(templatesList);
+      
+      // Update default template states
+      const thermalDefault = templatesList.find((t: any) => t.template_type === 'thermal' && t.is_default_for_type);
+      const a4Default = templatesList.find((t: any) => t.template_type === 'a4' && t.is_default_for_type);
+      
+      setDefaultThermalTemplate(thermalDefault?.id || null);
+      setDefaultA4Template(a4Default?.id || null);
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Failed to set default template');
+    } finally {
+      setSettingDefaultTemplate(null);
     }
   };
 
@@ -600,19 +644,80 @@ export default function SettingsPage() {
                 Default Invoice Template
               </label>
               <p className="text-xs text-gray-500 mb-2">
-                Choose the default template for invoices. You can select different templates when printing.
+                Click on a template card to set it as the default. You can select different templates when printing.
               </p>
               <div className="grid grid-cols-2 gap-4">
-                <div className="p-4 border border-gray-300 rounded-lg">
-                  <h4 className="font-semibold mb-2">Thermal Receipt</h4>
-                  <p className="text-xs text-gray-600 mb-2">Quick receipt format for thermal printers</p>
-                  <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Default for Thermal</span>
-                </div>
-                <div className="p-4 border border-gray-300 rounded-lg">
-                  <h4 className="font-semibold mb-2">A4 Professional</h4>
-                  <p className="text-xs text-gray-600 mb-2">Full tax invoice format for A4 printing</p>
-                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Default for A4</span>
-                </div>
+                {/* Thermal Template Card */}
+                {templates.filter((t: any) => t.template_type === 'thermal').length > 0 ? (
+                  templates.filter((t: any) => t.template_type === 'thermal').map((template: any) => (
+                    <div
+                      key={template.id}
+                      onClick={() => handleSetDefaultTemplate(template.id, 'thermal')}
+                      className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                        template.is_default_for_type
+                          ? 'border-green-500 bg-green-50 hover:bg-green-100'
+                          : 'border-gray-300 hover:border-green-400 hover:bg-gray-50'
+                      } ${settingDefaultTemplate === template.id ? 'opacity-50 cursor-wait' : ''}`}
+                    >
+                      <h4 className="font-semibold mb-2">{template.template_name}</h4>
+                      <p className="text-xs text-gray-600 mb-2">Quick receipt format for thermal printers</p>
+                      {template.is_default_for_type ? (
+                        <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded font-medium">
+                          ✓ Default for Thermal
+                        </span>
+                      ) : (
+                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
+                          Click to set as default
+                        </span>
+                      )}
+                      {settingDefaultTemplate === template.id && (
+                        <p className="text-xs text-blue-600 mt-2">Setting as default...</p>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-4 border border-gray-300 rounded-lg opacity-50">
+                    <h4 className="font-semibold mb-2">Thermal Receipt</h4>
+                    <p className="text-xs text-gray-600 mb-2">Loading templates...</p>
+                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">Default for Thermal</span>
+                  </div>
+                )}
+                
+                {/* A4 Template Cards */}
+                {templates.filter((t: any) => t.template_type === 'a4').length > 0 ? (
+                  templates.filter((t: any) => t.template_type === 'a4').map((template: any) => (
+                    <div
+                      key={template.id}
+                      onClick={() => handleSetDefaultTemplate(template.id, 'a4')}
+                      className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                        template.is_default_for_type
+                          ? 'border-blue-500 bg-blue-50 hover:bg-blue-100'
+                          : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50'
+                      } ${settingDefaultTemplate === template.id ? 'opacity-50 cursor-wait' : ''}`}
+                    >
+                      <h4 className="font-semibold mb-2">{template.template_name}</h4>
+                      <p className="text-xs text-gray-600 mb-2">Full tax invoice format for A4 printing</p>
+                      {template.is_default_for_type ? (
+                        <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded font-medium">
+                          ✓ Default for A4
+                        </span>
+                      ) : (
+                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
+                          Click to set as default
+                        </span>
+                      )}
+                      {settingDefaultTemplate === template.id && (
+                        <p className="text-xs text-blue-600 mt-2">Setting as default...</p>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-4 border border-gray-300 rounded-lg opacity-50">
+                    <h4 className="font-semibold mb-2">A4 Professional</h4>
+                    <p className="text-xs text-gray-600 mb-2">Loading templates...</p>
+                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">Default for A4</span>
+                  </div>
+                )}
               </div>
             </div>
             <div className="pt-4 border-t border-gray-200">
