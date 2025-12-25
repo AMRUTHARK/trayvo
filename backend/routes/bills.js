@@ -217,7 +217,7 @@ router.get('/:id', async (req, res, next) => {
     }
 
     const [items] = await pool.execute(
-      `SELECT bi.*, p.name as product_name, p.sku, p.unit, COALESCE(bi.hsn_code, p.hsn_code) as hsn_code
+      `SELECT bi.*, p.name as product_name, p.sku, p.unit, p.hsn_code
        FROM bill_items bi
        JOIN products p ON bi.product_id = p.id
        WHERE bi.bill_id = ?
@@ -371,17 +371,47 @@ router.post('/', [
       const billId = billResult.insertId;
 
       // Create bill items and update stock
-      for (const item of billItems) {
-        await connection.execute(
-          `INSERT INTO bill_items (bill_id, product_id, product_name, sku, hsn_code, quantity, unit, 
-                                  unit_price, gst_rate, gst_amount, discount_amount, total_amount)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            billId, item.product_id, item.product_name, item.sku, item.hsn_code || null,
-            item.quantity, item.unit, item.unit_price, item.gst_rate,
-            item.gst_amount, item.discount_amount, item.total_amount
-          ]
+      // Check if hsn_code column exists in bill_items table
+      let hasHsnCodeColumn = false;
+      try {
+        const [columns] = await connection.execute(
+          `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS 
+           WHERE TABLE_SCHEMA = DATABASE() 
+           AND TABLE_NAME = 'bill_items' 
+           AND COLUMN_NAME = 'hsn_code'`
         );
+        hasHsnCodeColumn = columns.length > 0;
+      } catch (err) {
+        // If check fails, assume column doesn't exist
+        hasHsnCodeColumn = false;
+      }
+
+      for (const item of billItems) {
+        if (hasHsnCodeColumn) {
+          // Insert with hsn_code if column exists
+          await connection.execute(
+            `INSERT INTO bill_items (bill_id, product_id, product_name, sku, hsn_code, quantity, unit, 
+                                    unit_price, gst_rate, gst_amount, discount_amount, total_amount)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              billId, item.product_id, item.product_name, item.sku, item.hsn_code || null,
+              item.quantity, item.unit, item.unit_price, item.gst_rate,
+              item.gst_amount, item.discount_amount, item.total_amount
+            ]
+          );
+        } else {
+          // Insert without hsn_code if column doesn't exist (backward compatibility)
+          await connection.execute(
+            `INSERT INTO bill_items (bill_id, product_id, product_name, sku, quantity, unit, 
+                                    unit_price, gst_rate, gst_amount, discount_amount, total_amount)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              billId, item.product_id, item.product_name, item.sku,
+              item.quantity, item.unit, item.unit_price, item.gst_rate,
+              item.gst_amount, item.discount_amount, item.total_amount
+            ]
+          );
+        }
 
         // Update product stock
         const [currentStock] = await connection.execute(
