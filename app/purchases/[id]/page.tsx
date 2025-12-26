@@ -51,12 +51,22 @@ export default function PurchaseDetailPage() {
       <div className="max-w-4xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-gray-900">Purchase Details</h1>
-          <button
-            onClick={() => router.push('/purchases')}
-            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-          >
-            Back to Purchases
-          </button>
+          <div className="flex gap-3">
+            {purchase.status === 'completed' && (
+              <button
+                onClick={() => router.push(`/purchases/${params.id}/edit`)}
+                className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700"
+              >
+                ✏️ Edit Purchase
+              </button>
+            )}
+            <button
+              onClick={() => router.push('/purchases')}
+              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Back to Purchases
+            </button>
+          </div>
         </div>
 
         <div className="bg-white rounded-lg shadow p-8">
