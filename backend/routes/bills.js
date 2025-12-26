@@ -559,5 +559,390 @@ router.post('/:id/cancel', async (req, res, next) => {
   }
 });
 
+// Get edit preview for a bill
+router.get('/:id/edit-preview', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    // Validate if bill can be edited
+    const validation = await editValidator.validateBillEdit(id, req.shopId, req.user);
+
+    if (!validation.canEdit) {
+      return res.status(400).json({
+        success: false,
+        message: validation.reason,
+        restrictions: validation.restrictions
+      });
+    }
+
+    // Get bill data
+    const [bills] = await pool.execute(
+      `SELECT b.*, u.username as cashier_name 
+       FROM bills b
+       JOIN users u ON b.user_id = u.id
+       WHERE b.id = ? AND b.shop_id = ?`,
+      [id, req.shopId]
+    );
+
+    if (!bills.length) {
+      return res.status(404).json({
+        success: false,
+        message: 'Bill not found'
+      });
+    }
+
+    const [items] = await pool.execute(
+      'SELECT * FROM bill_items WHERE bill_id = ? ORDER BY id',
+      [id]
+    );
+
+    res.json({
+      success: true,
+      data: {
+        ...bills[0],
+        items,
+        canEdit: true,
+        restrictions: validation.restrictions
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Update/edit a bill
+router.put('/:id', [
+  body('items').isArray({ min: 1 }).withMessage('At least one item is required'),
+  body('items.*.product_id').isInt().withMessage('Valid product ID is required'),
+  body('items.*.quantity').isFloat({ min: 0.001 }).withMessage('Valid quantity is required'),
+  body('payment_mode').optional().isIn(['cash', 'upi', 'card', 'mixed']).withMessage('Invalid payment mode'),
+  body('edit_reason').optional().trim()
+], async (req, res, next) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { id } = req.params;
+    const connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    try {
+      // Validate if bill can be edited
+      const validation = await editValidator.validateBillEdit(id, req.shopId, req.user, connection);
+      
+      if (!validation.canEdit) {
+        await connection.rollback();
+        connection.release();
+        return res.status(400).json({
+          success: false,
+          message: validation.reason,
+          restrictions: validation.restrictions
+        });
+      }
+
+      // Get original bill data for history
+      const [originalBills] = await connection.execute(
+        'SELECT * FROM bills WHERE id = ? AND shop_id = ?',
+        [id, req.shopId]
+      );
+
+      if (!originalBills.length) {
+        await connection.rollback();
+        connection.release();
+        return res.status(404).json({
+          success: false,
+          message: 'Bill not found'
+        });
+      }
+
+      const originalBill = originalBills[0];
+      const billNumber = originalBill.bill_number;
+
+      // Get original items for history
+      const [originalItems] = await connection.execute(
+        'SELECT * FROM bill_items WHERE bill_id = ?',
+        [id]
+      );
+
+      // Prepare edit history data
+      const originalData = {
+        bill: originalBill,
+        items: originalItems
+      };
+
+      // Get new data from request
+      const {
+        customer_name, customer_phone, customer_email, customer_gstin,
+        customer_address, shipping_address,
+        items, discount_amount, discount_percent,
+        payment_mode, payment_details, notes,
+        include_gst = true,
+        edit_reason
+      } = req.body;
+
+      // Validate stock availability for new items
+      const stockValidation = await editValidator.validateStockAvailability(
+        items, req.shopId, true, connection
+      );
+
+      if (!stockValidation.valid) {
+        await connection.rollback();
+        connection.release();
+        return res.status(400).json({
+          success: false,
+          message: 'Stock validation failed',
+          errors: stockValidation.errors
+        });
+      }
+
+      // Calculate totals for new items
+      const totals = editHelper.calculateBillTotals(items, discount_amount, discount_percent, include_gst);
+
+      // Create edit history entry
+      const changesSummary = editHelper.generateChangesSummary(
+        { ...originalBill, items: originalItems },
+        { customer_name, customer_phone, items, discount_amount, discount_percent }
+      );
+
+      await editHelper.createEditHistory(
+        'bill',
+        id,
+        req.user.id,
+        edit_reason,
+        originalData,
+        changesSummary,
+        connection
+      );
+
+      // Reverse old stock
+      await stockManager.reverseBillStock(
+        id,
+        req.shopId,
+        req.user.id,
+        `Bill edit reversal - ${billNumber}`,
+        connection
+      );
+
+      // Delete old items
+      await connection.execute('DELETE FROM bill_items WHERE bill_id = ?', [id]);
+
+      // Process new items
+      const billItems = [];
+      for (const item of items) {
+        const [products] = await connection.execute(
+          `SELECT id, name, sku, hsn_code, unit, selling_price, gst_rate 
+           FROM products 
+           WHERE id = ? AND shop_id = ? AND is_active = TRUE`,
+          [item.product_id, req.shopId]
+        );
+
+        if (!products.length) {
+          throw new Error(`Product ${item.product_id} not found`);
+        }
+
+        const product = products[0];
+        const unitPrice = parseFloat(item.unit_price || product.selling_price);
+        const quantity = parseFloat(item.quantity);
+        const gstRate = parseFloat(item.gst_rate || product.gst_rate || 0);
+        const itemSubtotal = unitPrice * quantity;
+        const itemDiscount = parseFloat(item.discount_amount || 0);
+        const itemTotalAfterDiscount = itemSubtotal - itemDiscount;
+        const itemGst = include_gst ? (itemTotalAfterDiscount * gstRate) / 100 : 0;
+        const itemTotal = itemTotalAfterDiscount + itemGst;
+
+        billItems.push({
+          product_id: product.id,
+          product_name: product.name,
+          sku: product.sku,
+          hsn_code: item.hsn_code || product.hsn_code || null,
+          quantity,
+          unit: product.unit,
+          unit_price: unitPrice,
+          gst_rate: gstRate,
+          gst_amount: itemGst,
+          discount_amount: itemDiscount,
+          total_amount: itemTotal
+        });
+      }
+
+      // Insert new items
+      const hasHsnCodeColumn = await connection.execute(
+        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS 
+         WHERE TABLE_SCHEMA = DATABASE() 
+         AND TABLE_NAME = 'bill_items' 
+         AND COLUMN_NAME = 'hsn_code'`
+      ).then(([cols]) => cols.length > 0).catch(() => false);
+
+      for (const item of billItems) {
+        if (hasHsnCodeColumn) {
+          await connection.execute(
+            `INSERT INTO bill_items (bill_id, product_id, product_name, sku, hsn_code, quantity, unit, 
+                                    unit_price, gst_rate, gst_amount, discount_amount, total_amount)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              id, item.product_id, item.product_name, item.sku, item.hsn_code || null,
+              item.quantity, item.unit, item.unit_price, item.gst_rate,
+              item.gst_amount, item.discount_amount, item.total_amount
+            ]
+          );
+        } else {
+          await connection.execute(
+            `INSERT INTO bill_items (bill_id, product_id, product_name, sku, quantity, unit, 
+                                    unit_price, gst_rate, gst_amount, discount_amount, total_amount)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              id, item.product_id, item.product_name, item.sku,
+              item.quantity, item.unit, item.unit_price, item.gst_rate,
+              item.gst_amount, item.discount_amount, item.total_amount
+            ]
+          );
+        }
+      }
+
+      // Apply new stock
+      await stockManager.applyBillStock(billItems, id, req.shopId, req.user.id, billNumber, connection);
+
+      // Update bill
+      await connection.execute(
+        `UPDATE bills SET 
+         customer_name = ?, customer_phone = ?, customer_email = ?,
+         customer_gstin = ?, customer_address = ?, shipping_address = ?,
+         subtotal = ?, discount_amount = ?, discount_percent = ?,
+         gst_amount = ?, total_amount = ?, round_off = ?,
+         payment_mode = ?, payment_details = ?, notes = ?,
+         last_edited_at = NOW(), last_edited_by = ?, edit_count = edit_count + 1
+         WHERE id = ?`,
+        [
+          customer_name || null, customer_phone || null, customer_email || null,
+          customer_gstin || null, customer_address || null,
+          shipping_address || customer_address || null,
+          totals.subtotal, totals.discount_amount, totals.discount_percent,
+          totals.gst_amount, totals.total_amount, totals.round_off,
+          payment_mode || originalBill.payment_mode,
+          payment_details ? JSON.stringify(payment_details) : originalBill.payment_details,
+          notes || null,
+          req.user.id,
+          id
+        ]
+      );
+
+      await connection.commit();
+      connection.release();
+
+      // Fetch updated bill
+      const [updatedBills] = await pool.execute(
+        `SELECT b.*, u.username as cashier_name 
+         FROM bills b
+         JOIN users u ON b.user_id = u.id
+         WHERE b.id = ?`,
+        [id]
+      );
+
+      const [updatedItems] = await pool.execute(
+        'SELECT * FROM bill_items WHERE bill_id = ? ORDER BY id',
+        [id]
+      );
+
+      res.json({
+        success: true,
+        message: 'Bill updated successfully',
+        data: {
+          ...updatedBills[0],
+          items: updatedItems
+        }
+      });
+    } catch (error) {
+      await connection.rollback();
+      connection.release();
+      throw error;
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Lock a bill (prevent editing)
+router.post('/:id/lock', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    if (req.user.role !== 'admin' && req.user.role !== 'super_admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only admins can lock bills'
+      });
+    }
+
+    const [result] = await pool.execute(
+      `UPDATE bills SET 
+       is_locked = TRUE, 
+       locked_reason = ?,
+       locked_at = NOW(),
+       locked_by = ?
+       WHERE id = ? AND shop_id = ?`,
+      [reason || 'Locked by administrator', req.user.id, id, req.shopId]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Bill not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Bill locked successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Unlock a bill (allow editing)
+router.post('/:id/unlock', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    if (req.user.role !== 'admin' && req.user.role !== 'super_admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only admins can unlock bills'
+      });
+    }
+
+    const [result] = await pool.execute(
+      `UPDATE bills SET 
+       is_locked = FALSE, 
+       locked_reason = NULL,
+       locked_at = NULL,
+       locked_by = NULL
+       WHERE id = ? AND shop_id = ?`,
+      [id, req.shopId]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Bill not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Bill unlocked successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;
 

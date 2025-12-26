@@ -7,12 +7,16 @@ A production-ready, full-stack web application for managing multiple shops with 
 - **Multi-Shop Support**: Each shop has isolated data and users
 - **Role-Based Access**: Admin and Cashier roles with appropriate permissions
 - **POS Billing**: Fast, intuitive point-of-sale interface
+- **Edit Sales & Purchase Entries**: Edit bills and purchases with automatic stock reconciliation and audit trail
 - **Inventory Management**: Real-time stock tracking with low-stock alerts
 - **Dashboard & Analytics**: Revenue, profit, margin tracking with charts
 - **Reports**: Sales, GST, Profit/Loss, Category-wise, and Payment mode reports
 - **Thermal Printing**: ESC/POS support for 58mm and 80mm printers
+- **A4 Professional Invoices**: Full tax invoice templates with company logo and bank details
 - **Export**: PDF and CSV export for all reports
 - **Responsive Design**: Works on desktop, tablet, and mobile devices
+
+For detailed feature documentation, see [FEATURES.md](./FEATURES.md)
 
 ## Tech Stack
 

@@ -101,6 +101,14 @@ export default function BillDetailPage() {
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-gray-900">Bill Details</h1>
           <div className="flex gap-3">
+            {bill.status === 'completed' && (
+              <button
+                onClick={() => router.push(`/bills/${id}/edit`)}
+                className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700"
+              >
+                ✏️ Edit Bill
+              </button>
+            )}
             <ThermalPrint bill={bill} />
             <InvoicePrintA4 bill={bill} />
             <button

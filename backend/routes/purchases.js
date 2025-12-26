@@ -3,6 +3,9 @@ const { body, validationResult } = require('express-validator');
 const pool = require('../config/database');
 const { authenticate } = require('../middleware/auth');
 const shopIsolation = require('../middleware/shopIsolation');
+const editValidator = require('../utils/editValidator');
+const editHelper = require('../utils/editHelper');
+const stockManager = require('../utils/stockManager');
 
 const router = express.Router();
 
@@ -423,6 +426,371 @@ router.post('/:id/cancel', async (req, res, next) => {
       connection.release();
       throw error;
     }
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Get edit preview for a purchase
+router.get('/:id/edit-preview', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    // Validate if purchase can be edited
+    const validation = await editValidator.validatePurchaseEdit(id, req.shopId, req.user);
+
+    if (!validation.canEdit) {
+      return res.status(400).json({
+        success: false,
+        message: validation.reason,
+        restrictions: validation.restrictions
+      });
+    }
+
+    // Get purchase data
+    const [purchases] = await pool.execute(
+      `SELECT p.*, u.username as user_name 
+       FROM purchases p
+       JOIN users u ON p.user_id = u.id
+       WHERE p.id = ? AND p.shop_id = ?`,
+      [id, req.shopId]
+    );
+
+    if (!purchases.length) {
+      return res.status(404).json({
+        success: false,
+        message: 'Purchase not found'
+      });
+    }
+
+    const [items] = await pool.execute(
+      `SELECT pi.*, pr.name as product_name, pr.sku, pr.unit
+       FROM purchase_items pi
+       JOIN products pr ON pi.product_id = pr.id
+       WHERE pi.purchase_id = ?
+       ORDER BY pi.id`,
+      [id]
+    );
+
+    res.json({
+      success: true,
+      data: {
+        ...purchases[0],
+        items,
+        canEdit: true,
+        restrictions: validation.restrictions
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Update/edit a purchase
+router.put('/:id', [
+  body('items').isArray({ min: 1 }).withMessage('At least one item is required'),
+  body('items.*.product_id').isInt().withMessage('Valid product ID is required'),
+  body('items.*.quantity').isFloat({ min: 0.001 }).withMessage('Valid quantity is required'),
+  body('payment_mode').optional().isIn(['cash', 'upi', 'card', 'credit']).withMessage('Invalid payment mode'),
+  body('edit_reason').optional().trim()
+], async (req, res, next) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { id } = req.params;
+
+    const connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    try {
+      // Validate if purchase can be edited
+      const validation = await editValidator.validatePurchaseEdit(id, req.shopId, req.user, connection);
+      
+      if (!validation.canEdit) {
+        await connection.rollback();
+        connection.release();
+        return res.status(400).json({
+          success: false,
+          message: validation.reason,
+          restrictions: validation.restrictions
+        });
+      }
+
+      // Get original purchase data for history
+      const [originalPurchases] = await connection.execute(
+        'SELECT * FROM purchases WHERE id = ? AND shop_id = ?',
+        [id, req.shopId]
+      );
+
+      if (!originalPurchases.length) {
+        await connection.rollback();
+        connection.release();
+        return res.status(404).json({
+          success: false,
+          message: 'Purchase not found'
+        });
+      }
+
+      const originalPurchase = originalPurchases[0];
+      const purchaseNumber = originalPurchase.purchase_number;
+
+      // Get original items for history
+      const [originalItems] = await connection.execute(
+        'SELECT * FROM purchase_items WHERE purchase_id = ?',
+        [id]
+      );
+
+      // Prepare edit history data
+      const originalData = {
+        purchase: originalPurchase,
+        items: originalItems
+      };
+
+      // Get new data from request
+      const {
+        supplier_name, supplier_phone, supplier_email, supplier_address,
+        items, discount_amount, discount_percent,
+        payment_mode, payment_details, notes,
+        status = 'completed',
+        edit_reason
+      } = req.body;
+
+      // Calculate totals for new items
+      let subtotal = 0;
+      let totalGst = 0;
+      const purchaseItems = [];
+
+      for (const item of items) {
+        const [products] = await connection.execute(
+          `SELECT id, name, sku, unit, cost_price, gst_rate 
+           FROM products 
+           WHERE id = ? AND shop_id = ? AND is_active = TRUE`,
+          [item.product_id, req.shopId]
+        );
+
+        if (!products.length) {
+          throw new Error(`Product ${item.product_id} not found`);
+        }
+
+        const product = products[0];
+        const unitPrice = parseFloat(item.unit_price || product.cost_price);
+        const quantity = parseFloat(item.quantity);
+        const gstRate = parseFloat(item.gst_rate || product.gst_rate || 0);
+        const itemSubtotal = unitPrice * quantity;
+        const itemDiscount = parseFloat(item.discount_amount || 0);
+        const itemTotalAfterDiscount = itemSubtotal - itemDiscount;
+        const itemGst = (itemTotalAfterDiscount * gstRate) / 100;
+        const itemTotal = itemTotalAfterDiscount + itemGst;
+
+        subtotal += itemSubtotal;
+        totalGst += itemGst;
+
+        purchaseItems.push({
+          product_id: product.id,
+          product_name: product.name,
+          sku: product.sku,
+          quantity,
+          unit: product.unit,
+          unit_price: unitPrice,
+          gst_rate: gstRate,
+          gst_amount: itemGst,
+          discount_amount: itemDiscount,
+          total_amount: itemTotal
+        });
+      }
+
+      const billDiscountAmount = discount_amount || (subtotal * (discount_percent || 0) / 100);
+      const finalSubtotal = subtotal - billDiscountAmount;
+      const totalAmount = finalSubtotal + totalGst;
+
+      // Create edit history entry
+      const changesSummary = editHelper.generateChangesSummary(
+        { ...originalPurchase, items: originalItems },
+        { supplier_name, items, discount_amount, discount_percent }
+      );
+
+      await editHelper.createEditHistory(
+        'purchase',
+        id,
+        req.user.id,
+        edit_reason,
+        originalData,
+        changesSummary,
+        connection
+      );
+
+      // Reverse old stock (only if purchase was completed)
+      if (originalPurchase.status === 'completed') {
+        await stockManager.reversePurchaseStock(
+          id,
+          req.shopId,
+          req.user.id,
+          `Purchase edit reversal - ${purchaseNumber}`,
+          connection
+        );
+      }
+
+      // Delete old items
+      await connection.execute('DELETE FROM purchase_items WHERE purchase_id = ?', [id]);
+
+      // Insert new items
+      for (const item of purchaseItems) {
+        await connection.execute(
+          `INSERT INTO purchase_items (purchase_id, product_id, product_name, sku, quantity, unit, 
+                                     unit_price, gst_rate, gst_amount, discount_amount, total_amount)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            id, item.product_id, item.product_name, item.sku,
+            item.quantity, item.unit, item.unit_price, item.gst_rate,
+            item.gst_amount, item.discount_amount, item.total_amount
+          ]
+        );
+      }
+
+      // Apply new stock (only if status is completed)
+      if (status === 'completed') {
+        await stockManager.applyPurchaseStock(purchaseItems, id, req.shopId, req.user.id, purchaseNumber, connection);
+      }
+
+      // Update purchase
+      await connection.execute(
+        `UPDATE purchases SET 
+         supplier_name = ?, supplier_phone = ?, supplier_email = ?, supplier_address = ?,
+         subtotal = ?, discount_amount = ?, discount_percent = ?,
+         gst_amount = ?, total_amount = ?,
+         payment_mode = ?, payment_details = ?, notes = ?, status = ?,
+         last_edited_at = NOW(), last_edited_by = ?, edit_count = edit_count + 1
+         WHERE id = ?`,
+        [
+          supplier_name || null, supplier_phone || null, supplier_email || null, supplier_address || null,
+          subtotal, billDiscountAmount, discount_percent || 0,
+          totalGst, totalAmount,
+          payment_mode || originalPurchase.payment_mode,
+          payment_details ? JSON.stringify(payment_details) : originalPurchase.payment_details,
+          notes || null, status,
+          req.user.id,
+          id
+        ]
+      );
+
+      await connection.commit();
+      connection.release();
+
+      // Fetch updated purchase
+      const [updatedPurchases] = await pool.execute(
+        `SELECT p.*, u.username as user_name 
+         FROM purchases p
+         JOIN users u ON p.user_id = u.id
+         WHERE p.id = ?`,
+        [id]
+      );
+
+      const [updatedItems] = await pool.execute(
+        `SELECT pi.*, pr.name as product_name, pr.sku, pr.unit
+         FROM purchase_items pi
+         JOIN products pr ON pi.product_id = pr.id
+         WHERE pi.purchase_id = ?
+         ORDER BY pi.id`,
+        [id]
+      );
+
+      res.json({
+        success: true,
+        message: 'Purchase updated successfully',
+        data: {
+          ...updatedPurchases[0],
+          items: updatedItems
+        }
+      });
+    } catch (error) {
+      await connection.rollback();
+      connection.release();
+      throw error;
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Lock a purchase (prevent editing)
+router.post('/:id/lock', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    if (req.user.role !== 'admin' && req.user.role !== 'super_admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only admins can lock purchases'
+      });
+    }
+
+    const [result] = await pool.execute(
+      `UPDATE purchases SET 
+       is_locked = TRUE, 
+       locked_reason = ?,
+       locked_at = NOW(),
+       locked_by = ?
+       WHERE id = ? AND shop_id = ?`,
+      [reason || 'Locked by administrator', req.user.id, id, req.shopId]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Purchase not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Purchase locked successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Unlock a purchase (allow editing)
+router.post('/:id/unlock', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    if (req.user.role !== 'admin' && req.user.role !== 'super_admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only admins can unlock purchases'
+      });
+    }
+
+    const [result] = await pool.execute(
+      `UPDATE purchases SET 
+       is_locked = FALSE, 
+       locked_reason = NULL,
+       locked_at = NULL,
+       locked_by = NULL
+       WHERE id = ? AND shop_id = ?`,
+      [id, req.shopId]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Purchase not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Purchase unlocked successfully'
+    });
   } catch (error) {
     next(error);
   }
