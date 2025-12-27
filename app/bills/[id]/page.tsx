@@ -103,7 +103,7 @@ export default function BillDetailPage() {
           <div className="flex gap-3">
             {bill.status === 'completed' && (
               <button
-                onClick={() => router.push(`/bills/${id}/edit`)}
+                onClick={() => router.push(`/bills/${params.id}/edit`)}
                 className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700"
               >
                 ✏️ Edit Bill
