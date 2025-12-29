@@ -4,6 +4,9 @@ const pool = require('../config/database');
 const { authenticate } = require('../middleware/auth');
 const shopIsolation = require('../middleware/shopIsolation');
 const { logError, logDatabaseError } = require('../utils/errorLogger');
+const editValidator = require('../utils/editValidator');
+const editHelper = require('../utils/editHelper');
+const stockManager = require('../utils/stockManager');
 
 const router = express.Router();
 
