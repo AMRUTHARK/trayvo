@@ -189,6 +189,57 @@ export default function POSPage() {
     }
   };
 
+  // Search customers
+  useEffect(() => {
+    if (customerSearch.length > 1) {
+      const timer = setTimeout(() => {
+        searchCustomers();
+      }, 300);
+      return () => clearTimeout(timer);
+    } else {
+      setCustomerResults([]);
+      setShowCustomerDropdown(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerSearch]);
+
+  const searchCustomers = async () => {
+    try {
+      const response = await api.get('/customers/search/quick', {
+        params: { q: customerSearch }
+      });
+      setCustomerResults(response.data.data || []);
+      setShowCustomerDropdown(true);
+    } catch (error) {
+      // Silently fail - customer search is optional
+      setCustomerResults([]);
+    }
+  };
+
+  const handleSelectCustomer = (customer: any) => {
+    setSelectedCustomerId(customer.id);
+    setCustomerName(customer.name || '');
+    setCustomerPhone(customer.phone || '');
+    setCustomerEmail(customer.email || '');
+    setCustomerGstin(customer.gstin || '');
+    setCustomerAddress(customer.address || '');
+    setCustomerSearch(customer.name || '');
+    setShowCustomerDropdown(false);
+    setCustomerResults([]);
+  };
+
+  const handleClearCustomer = () => {
+    setSelectedCustomerId(null);
+    setCustomerName('');
+    setCustomerPhone('');
+    setCustomerEmail('');
+    setCustomerGstin('');
+    setCustomerAddress('');
+    setCustomerSearch('');
+    setShowCustomerDropdown(false);
+    setCustomerResults([]);
+  };
+
   // Helper function to safely parse float and handle NaN
   const safeParseFloat = (value: any, defaultValue: number = 0): number => {
     const parsed = parseFloat(value);
