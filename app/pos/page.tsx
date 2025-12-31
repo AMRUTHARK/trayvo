@@ -5,7 +5,7 @@ import Layout from '@/components/Layout';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
-import { isSuperAdmin } from '@/lib/auth';
+import { isSuperAdmin, isAdmin } from '@/lib/auth';
 import { formatCurrency, formatQuantity } from '@/lib/format';
 
 interface CartItem {
@@ -25,8 +25,15 @@ export default function POSPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [products, setProducts] = useState<any[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
+  const [customerGstin, setCustomerGstin] = useState('');
+  const [customerAddress, setCustomerAddress] = useState('');
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [customerResults, setCustomerResults] = useState<any[]>([]);
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [paymentMode, setPaymentMode] = useState<'cash' | 'upi' | 'card' | 'mixed'>('cash');
   const [discountPercent, setDiscountPercent] = useState<string | number>('');
   const [discountAmount, setDiscountAmount] = useState<string | number>('');
@@ -319,8 +326,12 @@ export default function POSPage() {
       const discountPercentNum = safeParseFloat(String(discountPercent), 0);
 
       const response = await api.post('/bills', {
+        customer_id: selectedCustomerId || null,
         customer_name: customerName || null,
         customer_phone: customerPhone || null,
+        customer_email: customerEmail || null,
+        customer_gstin: customerGstin || null,
+        customer_address: customerAddress || null,
         items: cart.map((item) => ({
           product_id: item.product_id,
           quantity: item.quantity,
@@ -337,8 +348,10 @@ export default function POSPage() {
         toast.success('Bill created successfully!');
         // Reset form
         setCart([]);
-        setCustomerName('');
-        setCustomerPhone('');
+        handleClearCustomer();
+        setCustomerEmail('');
+        setCustomerGstin('');
+        setCustomerAddress('');
         setDiscountPercent('');
         setDiscountAmount('');
         setPaymentMode('cash');
@@ -461,6 +474,47 @@ export default function POSPage() {
             {/* Customer Info */}
             <div className="space-y-4 mb-6">
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Search Customer {selectedCustomerId && <span className="text-green-600 text-xs">(Selected)</span>}
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={customerSearch}
+                    onChange={(e) => setCustomerSearch(e.target.value)}
+                    onFocus={() => customerSearch.length > 1 && setShowCustomerDropdown(true)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-gray-900"
+                    placeholder="Search by name, phone, or GSTIN..."
+                  />
+                  {selectedCustomerId && (
+                    <button
+                      type="button"
+                      onClick={handleClearCustomer}
+                      className="absolute right-2 top-2 text-red-500 hover:text-red-700 text-xs"
+                    >
+                      Clear
+                    </button>
+                  )}
+                  {showCustomerDropdown && customerResults.length > 0 && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                      {customerResults.map((customer) => (
+                        <div
+                          key={customer.id}
+                          onClick={() => handleSelectCustomer(customer)}
+                          className="px-4 py-2 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                        >
+                          <div className="font-medium text-gray-900">{customer.name}</div>
+                          <div className="text-xs text-gray-500">
+                            {customer.phone && <span>📞 {customer.phone}</span>}
+                            {customer.gstin && <span className="ml-2">GST: {customer.gstin}</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Customer Name</label>
                 <input
                   type="text"
@@ -480,6 +534,41 @@ export default function POSPage() {
                   placeholder="Optional"
                 />
               </div>
+              {(isAdmin() || customerGstin) && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Customer Email</label>
+                    <input
+                      type="email"
+                      value={customerEmail}
+                      onChange={(e) => setCustomerEmail(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-gray-900"
+                      placeholder="Optional"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">GSTIN</label>
+                    <input
+                      type="text"
+                      maxLength={15}
+                      value={customerGstin}
+                      onChange={(e) => setCustomerGstin(e.target.value.toUpperCase().replace(/[^0-9A-Z]/g, ''))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 uppercase"
+                      placeholder="15 character GSTIN"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                    <textarea
+                      value={customerAddress}
+                      onChange={(e) => setCustomerAddress(e.target.value)}
+                      rows={2}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-gray-900"
+                      placeholder="Optional"
+                    />
+                  </div>
+                </>
+              )}
             </div>
 
             {/* GST Toggle */}

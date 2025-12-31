@@ -45,6 +45,10 @@ export default function EditBillPage() {
   const [bill, setBill] = useState<any>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [items, setItems] = useState<BillItem[]>([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [customerResults, setCustomerResults] = useState<any[]>([]);
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [formData, setFormData] = useState({
     customer_name: '',
     customer_phone: '',
@@ -81,6 +85,8 @@ export default function EditBillPage() {
       }
 
       setBill(billData);
+      setSelectedCustomerId(billData.customer_id || null);
+      setCustomerSearch(billData.customer_name || '');
       setFormData({
         customer_name: billData.customer_name || '',
         customer_phone: billData.customer_phone || '',
@@ -124,6 +130,64 @@ export default function EditBillPage() {
     } catch (error) {
       console.error('Error fetching products:', error);
     }
+  };
+
+  // Search customers
+  useEffect(() => {
+    if (customerSearch.length > 1) {
+      const timer = setTimeout(() => {
+        searchCustomers();
+      }, 300);
+      return () => clearTimeout(timer);
+    } else {
+      setCustomerResults([]);
+      setShowCustomerDropdown(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerSearch]);
+
+  const searchCustomers = async () => {
+    try {
+      const response = await api.get('/customers/search/quick', {
+        params: { q: customerSearch }
+      });
+      setCustomerResults(response.data.data || []);
+      setShowCustomerDropdown(true);
+    } catch (error) {
+      setCustomerResults([]);
+    }
+  };
+
+  const handleSelectCustomer = (customer: any) => {
+    setSelectedCustomerId(customer.id);
+    setFormData({
+      ...formData,
+      customer_name: customer.name || '',
+      customer_phone: customer.phone || '',
+      customer_email: customer.email || '',
+      customer_gstin: customer.gstin || '',
+      customer_address: customer.address || '',
+      shipping_address: customer.shipping_address || customer.address || ''
+    });
+    setCustomerSearch(customer.name || '');
+    setShowCustomerDropdown(false);
+    setCustomerResults([]);
+  };
+
+  const handleClearCustomer = () => {
+    setSelectedCustomerId(null);
+    setCustomerSearch('');
+    setFormData({
+      ...formData,
+      customer_name: '',
+      customer_phone: '',
+      customer_email: '',
+      customer_gstin: '',
+      customer_address: '',
+      shipping_address: ''
+    });
+    setShowCustomerDropdown(false);
+    setCustomerResults([]);
   };
 
   const handleAddItem = () => {
@@ -213,6 +277,7 @@ export default function EditBillPage() {
 
     try {
       const requestData = {
+        customer_id: selectedCustomerId,
         ...formData,
         items: items.map(item => ({
           product_id: item.product_id,
@@ -281,6 +346,47 @@ export default function EditBillPage() {
           <div className="border-b border-gray-200 pb-6">
             <h2 className="text-xl font-semibold mb-4">Customer Information</h2>
             <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Search Customer {selectedCustomerId && <span className="text-green-600 text-xs">(Selected)</span>}
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={customerSearch}
+                    onChange={(e) => setCustomerSearch(e.target.value)}
+                    onFocus={() => customerSearch.length > 1 && setShowCustomerDropdown(true)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    placeholder="Search by name, phone, or GSTIN..."
+                  />
+                  {selectedCustomerId && (
+                    <button
+                      type="button"
+                      onClick={handleClearCustomer}
+                      className="absolute right-2 top-2 text-red-500 hover:text-red-700 text-xs"
+                    >
+                      Clear
+                    </button>
+                  )}
+                  {showCustomerDropdown && customerResults.length > 0 && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                      {customerResults.map((customer) => (
+                        <div
+                          key={customer.id}
+                          onClick={() => handleSelectCustomer(customer)}
+                          className="px-4 py-2 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                        >
+                          <div className="font-medium text-gray-900">{customer.name}</div>
+                          <div className="text-xs text-gray-500">
+                            {customer.phone && <span>📞 {customer.phone}</span>}
+                            {customer.gstin && <span className="ml-2">GST: {customer.gstin}</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Customer Name</label>
                 <input

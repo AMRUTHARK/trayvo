@@ -219,6 +219,20 @@ router.get('/:id', async (req, res, next) => {
       });
     }
 
+    const bill = bills[0];
+    let customer = null;
+
+    // If bill has customer_id, fetch customer details
+    if (bill.customer_id) {
+      const [customers] = await pool.execute(
+        'SELECT * FROM customers WHERE id = ? AND shop_id = ?',
+        [bill.customer_id, req.shopId]
+      );
+      if (customers.length > 0) {
+        customer = customers[0];
+      }
+    }
+
     const [items] = await pool.execute(
       `SELECT bi.*, p.name as product_name, p.sku, p.unit, p.hsn_code
        FROM bill_items bi
@@ -231,8 +245,9 @@ router.get('/:id', async (req, res, next) => {
     res.json({
       success: true,
       data: {
-        ...bills[0],
-        items
+        ...bill,
+        items,
+        customer // Include customer object if exists
       }
     });
   } catch (error) {
@@ -258,6 +273,7 @@ router.post('/', [
     }
 
     const {
+      customer_id,
       customer_name, customer_phone, customer_email, customer_gstin, customer_address,
       shipping_address,
       items, discount_amount, discount_percent,
@@ -269,6 +285,34 @@ router.post('/', [
     await connection.beginTransaction();
 
     try {
+      // If customer_id is provided, fetch customer details
+      let finalCustomerName = customer_name || null;
+      let finalCustomerPhone = customer_phone || null;
+      let finalCustomerEmail = customer_email || null;
+      let finalCustomerGstin = customer_gstin || null;
+      let finalCustomerAddress = customer_address || null;
+      let finalShippingAddress = shipping_address || null;
+      let finalCustomerId = null;
+
+      if (customer_id) {
+        const [customers] = await connection.execute(
+          'SELECT * FROM customers WHERE id = ? AND shop_id = ? AND status = ?',
+          [customer_id, req.shopId, 'active']
+        );
+
+        if (customers.length > 0) {
+          const customer = customers[0];
+          finalCustomerId = customer.id;
+          // Use provided values as override, otherwise use customer record values
+          finalCustomerName = customer_name || customer.name || null;
+          finalCustomerPhone = customer_phone || customer.phone || null;
+          finalCustomerEmail = customer_email || customer.email || null;
+          finalCustomerGstin = customer_gstin || customer.gstin || null;
+          finalCustomerAddress = customer_address || customer.address || null;
+          finalShippingAddress = shipping_address || customer.shipping_address || customer.address || null;
+        }
+      }
+
       // Generate bill number using shop's pattern
       const billNumber = await generateBillNumber(req.shopId, connection);
 
@@ -352,18 +396,18 @@ router.post('/', [
       const roundedTotal = Math.round(totalBeforeRound);
       const roundOff = roundedTotal - totalBeforeRound;
 
-      // Create bill with new fields
+      // Create bill with new fields (include customer_id if available)
       const [billResult] = await connection.execute(
-        `INSERT INTO bills (shop_id, bill_number, user_id, customer_name, customer_phone, 
+        `INSERT INTO bills (shop_id, bill_number, user_id, customer_id, customer_name, customer_phone, 
                           customer_email, customer_gstin, customer_address, shipping_address,
                           subtotal, discount_amount, discount_percent, 
                           gst_amount, total_amount, round_off, payment_mode, payment_details, notes, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed')`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed')`,
         [
-          req.shopId, billNumber, req.user.id,
-          customer_name || null, customer_phone || null, customer_email || null,
-          customer_gstin || null, customer_address || null,
-          shipping_address || customer_address || null, // Default shipping to customer address if not provided
+          req.shopId, billNumber, req.user.id, finalCustomerId,
+          finalCustomerName, finalCustomerPhone, finalCustomerEmail,
+          finalCustomerGstin, finalCustomerAddress,
+          finalShippingAddress || finalCustomerAddress || null, // Default shipping to customer address if not provided
           subtotal, billDiscountAmount, discount_percent || 0,
           totalGst, roundedTotal, roundOff, payment_mode,
           payment_details ? JSON.stringify(payment_details) : null,
@@ -681,6 +725,7 @@ router.put('/:id', [
 
       // Get new data from request
       const {
+        customer_id,
         customer_name, customer_phone, customer_email, customer_gstin,
         customer_address, shipping_address,
         items, discount_amount, discount_percent,
@@ -688,6 +733,34 @@ router.put('/:id', [
         include_gst = true,
         edit_reason
       } = req.body;
+
+      // If customer_id is provided, fetch customer details
+      let finalCustomerName = customer_name;
+      let finalCustomerPhone = customer_phone;
+      let finalCustomerEmail = customer_email;
+      let finalCustomerGstin = customer_gstin;
+      let finalCustomerAddress = customer_address;
+      let finalShippingAddress = shipping_address;
+      let finalCustomerId = customer_id || originalBill.customer_id;
+
+      if (customer_id && customer_id !== originalBill.customer_id) {
+        const [customers] = await connection.execute(
+          'SELECT * FROM customers WHERE id = ? AND shop_id = ? AND status = ?',
+          [customer_id, req.shopId, 'active']
+        );
+
+        if (customers.length > 0) {
+          const customer = customers[0];
+          finalCustomerId = customer.id;
+          // Use provided values as override, otherwise use customer record values
+          finalCustomerName = customer_name || customer.name || null;
+          finalCustomerPhone = customer_phone || customer.phone || null;
+          finalCustomerEmail = customer_email || customer.email || null;
+          finalCustomerGstin = customer_gstin || customer.gstin || null;
+          finalCustomerAddress = customer_address || customer.address || null;
+          finalShippingAddress = shipping_address || customer.shipping_address || customer.address || null;
+        }
+      }
 
       // Validate stock availability for new items
       const stockValidation = await editValidator.validateStockAvailability(
@@ -814,7 +887,7 @@ router.put('/:id', [
       // Update bill
       await connection.execute(
         `UPDATE bills SET 
-         customer_name = ?, customer_phone = ?, customer_email = ?,
+         customer_id = ?, customer_name = ?, customer_phone = ?, customer_email = ?,
          customer_gstin = ?, customer_address = ?, shipping_address = ?,
          subtotal = ?, discount_amount = ?, discount_percent = ?,
          gst_amount = ?, total_amount = ?, round_off = ?,
@@ -822,9 +895,10 @@ router.put('/:id', [
          last_edited_at = NOW(), last_edited_by = ?, edit_count = edit_count + 1
          WHERE id = ?`,
         [
-          customer_name || null, customer_phone || null, customer_email || null,
-          customer_gstin || null, customer_address || null,
-          shipping_address || customer_address || null,
+          finalCustomerId,
+          finalCustomerName || null, finalCustomerPhone || null, finalCustomerEmail || null,
+          finalCustomerGstin || null, finalCustomerAddress || null,
+          finalShippingAddress || finalCustomerAddress || null,
           totals.subtotal, totals.discount_amount, totals.discount_percent,
           totals.gst_amount, totals.total_amount, totals.round_off,
           payment_mode || originalBill.payment_mode,

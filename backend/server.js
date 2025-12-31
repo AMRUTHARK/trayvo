@@ -73,6 +73,7 @@ app.use('/api/purchase-returns', require('./routes/purchaseReturns'));
 app.use('/api/sales-returns', require('./routes/salesReturns'));
 app.use('/api/error-logs', require('./routes/errorLogs'));
 app.use('/api/invoice-templates', require('./routes/invoiceTemplates'));
+app.use('/api/customers', require('./routes/customers'));
 
 // Error handling middleware (must be after all routes)
 const errorHandler = require('./middleware/errorHandler');

@@ -46,6 +46,7 @@ export default function Layout({ children }: LayoutProps) {
     ...(!isCashier() ? [
       { href: '/products', label: 'Products', icon: '📦' },
       { href: '/categories', label: 'Categories', icon: '🏷️' },
+      { href: '/customers', label: 'Customers', icon: '👥' },
       { href: '/inventory', label: 'Inventory', icon: '📋' },
     ] : []),
     { href: '/bills', label: 'Bills', icon: '🧾' },
