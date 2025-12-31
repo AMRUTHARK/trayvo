@@ -97,7 +97,7 @@ export default function InvoicePrintA4({ bill, templateConfig }: InvoicePrintA4P
         return;
       }
 
-      const printWindow = window.open('', '_blank', 'width=800,height=600');
+      const printWindow = window.open('', '_blank', 'width=900,height=700');
       if (!printWindow) {
         toast.error('Please allow popups to print');
         setPrinting(false);
@@ -136,6 +136,12 @@ export default function InvoicePrintA4({ bill, templateConfig }: InvoicePrintA4P
       const cgstRate = gstRate / 2;
       const sgstRate = gstRate / 2;
       const grandTotal = parseFloat(bill.total_amount || 0);
+      
+      // Format shop address for display
+      const formatAddress = (address: string) => {
+        if (!address) return '';
+        return address.replace(/\n/g, '<br>');
+      };
 
       printWindow.document.open();
       printWindow.document.write(`
@@ -145,239 +151,196 @@ export default function InvoicePrintA4({ bill, templateConfig }: InvoicePrintA4P
             <meta charset="UTF-8" />
             <title>Tax Invoice</title>
             <style>
-              @page {
-                size: A4;
-                margin: 12mm;
-              }
-              * {
-                margin: 0;
-                padding: 0;
-                box-sizing: border-box;
-              }
               body {
                 font-family: Arial, Helvetica, sans-serif;
-                font-size: 12px;
-                color: #000;
+                background: #f5f5f5;
               }
               .invoice {
+                width: 800px;
+                margin: 20px auto;
+                background: #fff;
+                padding: 20px;
                 border: 2px solid #000;
-                padding: 10px;
-              }
-              .header {
-                display: flex;
-                justify-content: space-between;
-                border-bottom: 2px solid #000;
-                padding-bottom: 10px;
-              }
-              .company-details {
-                width: 70%;
-                line-height: 1.5;
-              }
-              .company-details strong {
-                font-weight: bold;
-              }
-              .logo-box {
-                width: 25%;
-                text-align: center;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-              }
-              .logo-box img {
-                max-width: 100%;
-                height: auto;
-                max-height: 100px;
-              }
-              .title {
-                text-align: center;
-                font-size: 18px;
-                font-weight: bold;
-                margin: 10px 0;
-                border-bottom: 2px solid #000;
-                padding-bottom: 5px;
-              }
-              .billing {
-                display: flex;
-                border-bottom: 2px solid #000;
-              }
-              .billing div {
-                width: 50%;
-                padding: 8px;
-                border-right: 1px solid #000;
-              }
-              .billing div:last-child {
-                border-right: none;
-              }
-              .billing div strong {
-                font-weight: bold;
               }
               table {
                 width: 100%;
                 border-collapse: collapse;
-                margin-top: 10px;
+                font-size: 14px;
               }
-              table th, table td {
+              td, th {
                 border: 1px solid #000;
                 padding: 6px;
-                text-align: center;
+                vertical-align: top;
               }
-              table th {
-                background: #f2f2f2;
-                font-weight: bold;
+              .no-border td {
+                border: none;
               }
-              .text-left {
-                text-align: left;
-              }
-              .text-right {
-                text-align: right;
-              }
-              .totals {
-                width: 40%;
-                float: right;
-                margin-top: 10px;
-              }
-              .totals table {
-                margin-top: 0;
-              }
-              .totals table td {
+              .header td {
                 border: 1px solid #000;
               }
-              .totals table th {
-                background: #f2f2f2;
+              .logo {
+                text-align: center;
               }
-              .bank {
-                margin-top: 60px;
-                border-top: 2px solid #000;
-                padding-top: 8px;
-                clear: both;
+              .logo img {
+                width: 120px;
               }
-              .bank strong {
+              .title {
+                text-align: center;
+                font-size: 26px;
+                font-weight: bold;
+                padding: 10px 0;
+              }
+              .yellow {
+                background: #fff176;
+                font-weight: bold;
+                text-align: center;
+              }
+              .right {
+                text-align: right;
+              }
+              .center {
+                text-align: center;
+              }
+              .bold {
+                font-weight: bold;
+              }
+              .totals td {
                 font-weight: bold;
               }
               .footer {
-                margin-top: 40px;
-                display: flex;
-                justify-content: space-between;
+                margin-top: 30px;
+                font-size: 13px;
               }
               .signature {
                 text-align: right;
                 margin-top: 40px;
               }
+              @media print {
+                body {
+                  background: none;
+                }
+                .invoice {
+                  margin: 0;
+                  border: 2px solid #000;
+                }
+              }
             </style>
           </head>
           <body>
             <div class="invoice">
-              <!-- Header -->
-              <div class="header">
-                <div class="company-details">
-                  <strong>${(shop.shop_name || '').toUpperCase()}</strong><br>
-                  ${shop.address ? (typeof shop.address === 'string' ? shop.address.replace(/\\n/g, '<br>') : shop.address) + '<br>' : ''}
-                  ${shop.phone ? `Phone: ${shop.phone}<br>` : ''}
-                  ${shop.email ? `Email: ${shop.email}<br>` : ''}
-                  ${shop.gstin ? `GSTIN: ${shop.gstin}<br>` : ''}
-                  ${shop.state ? `State: ${shop.state}` : ''}
-                </div>
-                ${shop.logo_url ? `
-                  <div class="logo-box">
-                    <img src="${shop.logo_url}" alt="Company Logo">
-                  </div>
-                ` : '<div class="logo-box"></div>'}
-              </div>
-
-              <!-- Title -->
-              <div class="title">TAX INVOICE</div>
-
-              <!-- Billing -->
-              <div class="billing">
-                <div>
-                  <strong>Bill To:</strong><br>
-                  ${bill.customer_name || ''}<br>
-                  ${bill.customer_address ? (typeof bill.customer_address === 'string' ? bill.customer_address.replace(/\\n/g, '<br>') : bill.customer_address) + '<br>' : ''}
-                  ${bill.customer_phone ? `Contact: ${bill.customer_phone}<br>` : ''}
-                  ${bill.customer_gstin ? `GSTIN: ${bill.customer_gstin}<br>` : 'GSTIN:<br>'}
-                  ${shop.state ? `State: ${shop.state}` : 'State:'}
-                </div>
-                <div>
-                  <strong>Invoice No:</strong> ${bill.bill_number}<br>
-                  <strong>Date:</strong> ${formatDate(bill.created_at)}<br><br>
-                  <strong>Shipping To:</strong><br>
-                  ${bill.shipping_address || bill.customer_address ? (typeof (bill.shipping_address || bill.customer_address) === 'string' ? (bill.shipping_address || bill.customer_address).replace(/\\n/g, '<br>') : (bill.shipping_address || bill.customer_address)) + '<br>' : ''}
-                </div>
-              </div>
-
-              <!-- Items Table -->
-              <table>
-                <thead>
-                  <tr>
-                    <th>SL NO</th>
-                    <th class="text-left">ITEMS</th>
-                    <th>HSN</th>
-                    <th>UNIT PRICE</th>
-                    <th>QTY</th>
-                    <th>AMOUNT</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${bill.items.map((item: any, index: number) => {
-                    const itemAmount = parseFloat(item.unit_price || 0) * parseFloat(item.quantity || 0);
-                    return `
-                      <tr>
-                        <td>${index + 1}</td>
-                        <td class="text-left">${item.product_name}</td>
-                        <td>${item.hsn_code || '-'}</td>
-                        <td class="text-right">${parseFloat(item.unit_price || 0).toFixed(2)}</td>
-                        <td>${parseFloat(item.quantity || 0).toFixed(0)}</td>
-                        <td class="text-right">${itemAmount.toFixed(2)}</td>
-                      </tr>
-                    `;
-                  }).join('')}
-                </tbody>
+              <!-- TOP HEADER -->
+              <table class="header">
+                <tr>
+                  <td width="70%">
+                    <b>Company/Seller Name:</b> ${(shop.shop_name || '').toUpperCase()}<br>
+                    ${shop.address ? `<b>Address:</b> ${formatAddress(shop.address)}<br>` : ''}
+                    ${shop.phone ? `<b>Phone No.:</b> ${shop.phone}<br>` : ''}
+                    ${shop.email ? `<b>Email ID:</b> ${shop.email}<br>` : ''}
+                    ${shop.gstin ? `<b>GSTIN:</b> ${shop.gstin}<br>` : ''}
+                    ${shop.state ? `<b>State:</b> ${(shop.state || '').toUpperCase()}` : ''}
+                  </td>
+                  <td class="logo">
+                    ${shop.logo_url ? `<img src="${shop.logo_url}" alt="Company Logo">` : ''}
+                  </td>
+                </tr>
               </table>
 
-              <!-- Totals -->
-              <div class="totals">
-                <table>
-                  <tr>
-                    <td>Total</td>
-                    <td class="text-right">${totalTaxable.toFixed(2)}</td>
-                  </tr>
-                  ${totalSGST > 0 ? `
+              <!-- TITLE -->
+              <div class="title">TAX Invoice</div>
+
+              <!-- BILL / SHIP DETAILS -->
+              <table>
+                <tr>
+                  <td width="50%">
+                    <b>Bill To:</b><br>
+                    ${bill.customer_name || ''}<br>
+                    ${bill.customer_address ? formatAddress(bill.customer_address) + '<br>' : ''}
+                    ${bill.customer_phone ? `<b>Contact No.:</b> ${bill.customer_phone}<br>` : '<b>Contact No.:</b><br>'}
+                    ${bill.customer_gstin ? `<b>GSTIN No.:</b> ${bill.customer_gstin}<br>` : '<b>GSTIN No.:</b><br>'}
+                    ${shop.state ? (shop.state || '').toUpperCase() : ''}
+                  </td>
+                  <td width="50%">
+                    <b>Shipping To:</b><br>
+                    ${bill.shipping_address || bill.customer_address ? formatAddress(bill.shipping_address || bill.customer_address) + '<br><br>' : '<br><br>'}
+                    <b>Invoice No.:</b> ${bill.bill_number}<br>
+                    <b>Date:</b> ${formatDate(bill.created_at)}
+                  </td>
+                </tr>
+              </table>
+
+              <!-- ITEMS TABLE -->
+              <table>
+                <tr class="yellow">
+                  <td>SL NO</td>
+                  <td>ITEMS</td>
+                  <td>HSN</td>
+                  <td>UNIT PRICE</td>
+                  <td>QUANTITY</td>
+                  <td>AMOUNT</td>
+                </tr>
+                ${bill.items.map((item: any, index: number) => {
+                  const itemAmount = parseFloat(item.unit_price || 0) * parseFloat(item.quantity || 0);
+                  return `
                     <tr>
-                      <td>SGST (${sgstRate.toFixed(1)}%)</td>
-                      <td class="text-right">${totalSGST.toFixed(2)}</td>
+                      <td class="center">${index + 1}</td>
+                      <td>${item.product_name}</td>
+                      <td>${item.hsn_code || ''}</td>
+                      <td class="right">${parseFloat(item.unit_price || 0).toFixed(2)}</td>
+                      <td class="center">${parseFloat(item.quantity || 0).toFixed(0)}</td>
+                      <td class="right">${itemAmount.toFixed(2)}</td>
                     </tr>
-                  ` : ''}
-                  ${totalCGST > 0 ? `
-                    <tr>
-                      <td>CGST (${cgstRate.toFixed(1)}%)</td>
-                      <td class="text-right">${totalCGST.toFixed(2)}</td>
-                    </tr>
-                  ` : ''}
-                  <tr>
-                    <th>Grand Total</th>
-                    <th class="text-right">${grandTotal.toFixed(2)}</th>
-                  </tr>
-                </table>
+                  `;
+                }).join('')}
+                <!-- EMPTY ROWS FOR SPACE -->
+                <tr><td colspan="6" style="height:140px;"></td></tr>
+              </table>
+
+              <!-- TOTALS & BANK -->
+              <table>
+                <tr>
+                  <td width="50%">
+                    ${(shop.bank_name || shop.account_number) ? `
+                      <b>BANK DETAILS</b><br>
+                      ${shop.bank_name ? `${(shop.bank_name || '').toUpperCase()}${shop.bank_branch ? ' ' + (shop.bank_branch || '').toUpperCase() + ' BRANCH' : ''}<br>` : ''}
+                      ${shop.account_number ? `<b>ACCOUNT NO:</b> ${shop.account_number}<br>` : ''}
+                      ${shop.ifsc_code ? `<b>IFSC CODE:</b> ${shop.ifsc_code}` : ''}
+                    ` : ''}
+                  </td>
+                  <td width="50%">
+                    <table>
+                      <tr>
+                        <td>TOTAL</td>
+                        <td class="right">${totalTaxable.toFixed(2)}</td>
+                      </tr>
+                      ${totalSGST > 0 ? `
+                        <tr>
+                          <td>SGST ${sgstRate.toFixed(1)}%</td>
+                          <td class="right">${totalSGST.toFixed(2)}</td>
+                        </tr>
+                      ` : ''}
+                      ${totalCGST > 0 ? `
+                        <tr>
+                          <td>CGST ${cgstRate.toFixed(1)}%</td>
+                          <td class="right">${totalCGST.toFixed(2)}</td>
+                        </tr>
+                      ` : ''}
+                      <tr class="totals">
+                        <td>GRAND TOTAL</td>
+                        <td class="right">${grandTotal.toFixed(2)}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- FOOTER -->
+              <div class="footer">
+                ${shop.email ? `In the case of any queries write us to ${shop.email}` : ''}
               </div>
 
-              <!-- Bank -->
-              ${(shop.bank_name || shop.account_number) ? `
-                <div class="bank">
-                  <strong>Bank Details</strong><br>
-                  ${shop.bank_name ? `Bank Name: ${shop.bank_name}<br>` : ''}
-                  ${shop.account_number ? `Account No: ${shop.account_number}<br>` : ''}
-                  ${shop.ifsc_code ? `IFSC: ${shop.ifsc_code}` : ''}
-                </div>
-              ` : ''}
-
-              <!-- Footer -->
-              <div class="footer">
-                <div>
-                  ${shop.email ? `In case of any queries write to ${shop.email}` : ''}
-                </div>
-                <div class="signature">
-                  Authorized Signature
-                </div>
+              <div class="signature">
+                _______________________<br>
+                Signature
               </div>
             </div>
           </body>
