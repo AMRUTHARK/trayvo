@@ -6,23 +6,31 @@
 const mysql = require('mysql2/promise');
 const fs = require('fs');
 const path = require('path');
-require('dotenv').config();
-
-const dbConfig = {
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'multi_shop_billing',
-  ssl: process.env.DB_SSL === 'true' ? {
-    rejectUnauthorized: false
-  } : false,
-  multipleStatements: true
-};
 
 async function runMigration() {
   let connection;
   
   try {
+    // Load environment variables from backend/.env
+    const envPath = path.join(__dirname, '..', 'backend', '.env');
+    require('dotenv').config({ path: envPath });
+    
+    // Check if DB_HOST contains tidbcloud or similar cloud providers that require SSL
+    const requiresSSL = process.env.DB_HOST?.includes('tidbcloud') || 
+                        process.env.DB_HOST?.includes('tidb') ||
+                        process.env.DB_SSL === 'true';
+    
+    const dbConfig = {
+      host: process.env.DB_HOST || 'localhost',
+      user: process.env.DB_USER || 'root',
+      password: process.env.DB_PASSWORD || '',
+      database: process.env.DB_NAME || 'multi_shop_billing',
+      ssl: requiresSSL ? {
+        rejectUnauthorized: false
+      } : undefined,
+      multipleStatements: true
+    };
+    
     console.log('Connecting to database...');
     connection = await mysql.createConnection(dbConfig);
     console.log('Connected successfully!');
@@ -31,11 +39,47 @@ async function runMigration() {
     const sqlFilePath = path.join(__dirname, 'migration_customers.sql');
     const sql = fs.readFileSync(sqlFilePath, 'utf8');
 
-    // Split by semicolon and filter out empty statements
-    const statements = sql
-      .split(';')
-      .map(s => s.trim())
-      .filter(s => s.length > 0 && !s.startsWith('--'));
+    // Split SQL into statements more carefully (handling CREATE TABLE with multiple semicolons)
+    // Remove comments first
+    const lines = sql.split('\n').filter(line => !line.trim().startsWith('--'));
+    const cleanedSql = lines.join('\n');
+    
+    // Split by semicolon but be smarter about it
+    let statements = [];
+    let currentStatement = '';
+    let inCreateTable = false;
+    let parenCount = 0;
+    
+    for (let i = 0; i < cleanedSql.length; i++) {
+      const char = cleanedSql[i];
+      currentStatement += char;
+      
+      if (char === '(') {
+        parenCount++;
+        if (currentStatement.toUpperCase().includes('CREATE TABLE')) {
+          inCreateTable = true;
+        }
+      } else if (char === ')') {
+        parenCount--;
+        if (parenCount === 0 && inCreateTable) {
+          inCreateTable = false;
+        }
+      } else if (char === ';' && !inCreateTable && parenCount === 0) {
+        const stmt = currentStatement.trim();
+        if (stmt.length > 0) {
+          statements.push(stmt);
+        }
+        currentStatement = '';
+      }
+    }
+    
+    // Add any remaining statement
+    if (currentStatement.trim().length > 0) {
+      statements.push(currentStatement.trim());
+    }
+    
+    // Filter out empty statements
+    statements = statements.filter(s => s.length > 0 && !s.startsWith('--'));
 
     console.log(`Executing ${statements.length} statements...`);
 
@@ -136,6 +180,52 @@ async function runMigration() {
           throw error;
         }
       }
+    }
+
+    // After all statements, add index and foreign key if column was created
+    try {
+      // Check if customer_id column exists
+      const [columns] = await connection.execute(
+        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS 
+         WHERE TABLE_SCHEMA = DATABASE() 
+         AND TABLE_NAME = 'bills' 
+         AND COLUMN_NAME = 'customer_id'`
+      );
+
+      if (columns.length > 0) {
+        // Column exists, now add index if it doesn't exist
+        const [indexes] = await connection.execute(
+          `SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS 
+           WHERE TABLE_SCHEMA = DATABASE() 
+           AND TABLE_NAME = 'bills' 
+           AND INDEX_NAME = 'idx_customer_id'`
+        );
+
+        if (indexes.length === 0) {
+          await connection.execute('ALTER TABLE bills ADD INDEX idx_customer_id (customer_id)');
+          console.log('✓ Added index idx_customer_id to bills table');
+        } else {
+          console.log('⊘ Index idx_customer_id already exists, skipping');
+        }
+
+        // Add foreign key if it doesn't exist
+        const [fks] = await connection.execute(
+          `SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+           WHERE TABLE_SCHEMA = DATABASE() 
+           AND CONSTRAINT_NAME = 'fk_bills_customer'`
+        );
+
+        if (fks.length === 0) {
+          await connection.execute(
+            'ALTER TABLE bills ADD CONSTRAINT fk_bills_customer FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL'
+          );
+          console.log('✓ Added foreign key fk_bills_customer');
+        } else {
+          console.log('⊘ Foreign key fk_bills_customer already exists, skipping');
+        }
+      }
+    } catch (error) {
+      console.log(`⚠ Warning: Could not add index/foreign key: ${error.message}`);
     }
 
     console.log('\n✅ Migration completed successfully!');

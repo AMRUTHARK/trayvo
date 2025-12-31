@@ -26,6 +26,4 @@ CREATE TABLE IF NOT EXISTS customers (
 
 -- Step 2: Add customer_id to bills table (nullable for backward compatibility)
 ALTER TABLE bills ADD COLUMN IF NOT EXISTS customer_id INT NULL AFTER user_id;
-ALTER TABLE bills ADD INDEX IF NOT EXISTS idx_customer_id (customer_id);
-ALTER TABLE bills ADD FOREIGN KEY IF NOT EXISTS fk_bills_customer (customer_id) REFERENCES customers(id) ON DELETE SET NULL;
 
