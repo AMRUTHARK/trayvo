@@ -481,8 +481,24 @@ export default function EditBillPage() {
                         type="number"
                         step="0.001"
                         min="0.001"
-                        value={item.quantity}
-                        onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+                        value={item.quantity === 0 ? '' : item.quantity}
+                        onChange={(e) => {
+                          const inputValue = e.target.value;
+                          if (inputValue === '' || inputValue === '.') {
+                            handleItemChange(index, 'quantity', 0);
+                            return;
+                          }
+                          const numValue = parseFloat(inputValue);
+                          if (!isNaN(numValue) && numValue >= 0) {
+                            handleItemChange(index, 'quantity', numValue);
+                          }
+                        }}
+                        onBlur={(e) => {
+                          const value = parseFloat(e.target.value) || 1;
+                          if (value <= 0) {
+                            handleItemChange(index, 'quantity', 1);
+                          }
+                        }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                       />
                       <span className="text-xs text-gray-500">{item.unit}</span>

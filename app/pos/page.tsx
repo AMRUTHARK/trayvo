@@ -18,6 +18,7 @@ interface CartItem {
   gst_rate: number;
   discount_amount: number;
   total_amount: number;
+  stock_quantity: number; // Store stock for validation
 }
 
 export default function POSPage() {
@@ -127,13 +128,20 @@ export default function POSPage() {
     }
   };
 
-  const handleRecallBill = (holdBill: any) => {
+  const handleRecallBill = async (holdBill: any) => {
     try {
       // bill_data might already be an object (from MySQL JSON column) or a string
       const billData = typeof holdBill.bill_data === 'string' 
         ? JSON.parse(holdBill.bill_data) 
         : holdBill.bill_data;
-      setCart(billData.cart || []);
+      
+      // Ensure cart items have stock_quantity (for old hold bills that don't have it)
+      const cartItems = (billData.cart || []).map((item: any) => ({
+        ...item,
+        stock_quantity: item.stock_quantity || 0 // Default to 0 if missing (will be validated on checkout)
+      }));
+      
+      setCart(cartItems);
       setCustomerName(billData.customerName || '');
       setCustomerPhone(billData.customerPhone || '');
       setPaymentMode(billData.paymentMode || 'cash');
@@ -142,6 +150,9 @@ export default function POSPage() {
       setIncludeGst(billData.includeGst !== undefined ? billData.includeGst : true);
       setShowHoldBills(false);
       toast.success('Bill recalled successfully');
+      
+      // Warn if any items might have stock issues (check against current stock)
+      // Note: We don't fetch fresh stock here to avoid complexity, backend will validate on checkout
     } catch (error) {
       toast.error('Failed to recall bill');
     }
@@ -246,15 +257,28 @@ export default function POSPage() {
     return isNaN(parsed) ? defaultValue : parsed;
   };
 
-  const addToCart = (product: any) => {
+  const addToCart = async (product: any) => {
     const existingItem = cart.find((item) => item.product_id === product.id);
+    const availableStock = safeParseFloat(product.stock_quantity, 0);
 
     if (existingItem) {
+      // Check if incrementing would exceed stock
+      const newQuantity = existingItem.quantity + 1;
+      if (newQuantity > availableStock) {
+        toast.error(`Insufficient stock for ${product.name}. Available: ${formatQuantity(availableStock)}`);
+        return;
+      }
+
       // Recalculate totals when incrementing quantity
+      // Also update stock_quantity with fresh stock from product
       setCart(
         cart.map((item) => {
           if (item.product_id === product.id) {
-            const updated = { ...item, quantity: item.quantity + 1 };
+            const updated = { 
+              ...item, 
+              quantity: newQuantity,
+              stock_quantity: availableStock // Update with fresh stock
+            };
             const itemTotal = (updated.unit_price || 0) * (updated.quantity || 0) - (updated.discount_amount || 0);
             const itemGst = includeGst ? (itemTotal * (updated.gst_rate || 0)) / 100 : 0;
             updated.total_amount = itemTotal + itemGst;
@@ -264,6 +288,12 @@ export default function POSPage() {
         })
       );
     } else {
+      // Check if product has stock before adding
+      if (availableStock < 1) {
+        toast.error(`Product ${product.name} is out of stock`);
+        return;
+      }
+
       const gstRate = safeParseFloat(product.gst_rate, 0);
       const unitPrice = safeParseFloat(product.selling_price, 0);
       const quantity = 1;
@@ -283,6 +313,7 @@ export default function POSPage() {
           gst_rate: gstRate,
           discount_amount: 0,
           total_amount: totalAmount,
+          stock_quantity: availableStock, // Store stock for validation
         },
       ]);
     }
@@ -294,6 +325,23 @@ export default function POSPage() {
     setCart(
       cart.map((item) => {
         if (item.product_id === productId) {
+          // Validate stock if updating quantity
+          if (field === 'quantity') {
+            const newQuantity = safeParseFloat(value, 0);
+            const availableStock = safeParseFloat(item.stock_quantity || 0, 0);
+            
+            // If quantity exceeds stock, show error and keep current value
+            if (newQuantity > availableStock) {
+              toast.error(`Insufficient stock for ${item.name}. Available: ${formatQuantity(availableStock)}`);
+              return item; // Return unchanged item
+            }
+            
+            // If quantity is 0 or negative, set to minimum 1 (will be handled on blur)
+            if (newQuantity <= 0) {
+              // Allow 0 temporarily while user is typing (will be fixed on blur)
+            }
+          }
+
           const updated = { ...item, [field]: value };
           
           // Recalculate totals
@@ -470,7 +518,12 @@ export default function POSPage() {
                     <div className="flex items-center justify-between mb-2">
                       <div>
                         <div className="font-medium text-gray-800">{item.name}</div>
-                        <div className="text-sm text-gray-600">SKU: {item.sku}</div>
+                        <div className="text-sm text-gray-600">SKU: {item.sku} | Stock: {formatQuantity(safeParseFloat(item.stock_quantity || 0, 0))}</div>
+                        {item.quantity > safeParseFloat(item.stock_quantity || 0, 0) && (
+                          <div className="text-xs text-red-600 font-medium mt-1">
+                            ⚠ Quantity exceeds available stock
+                          </div>
+                        )}
                       </div>
                       <button
                         onClick={() => removeFromCart(item.product_id)}
@@ -486,10 +539,40 @@ export default function POSPage() {
                           type="number"
                           min="0.001"
                           step="0.001"
-                          value={item.quantity}
+                          value={item.quantity === 0 ? '' : item.quantity}
                           onChange={(e) => {
-                            const value = safeParseFloat(e.target.value, 0);
-                            updateCartItem(item.product_id, 'quantity', value);
+                            const inputValue = e.target.value;
+                            // Handle empty input or just a decimal point
+                            if (inputValue === '' || inputValue === '.') {
+                              updateCartItem(item.product_id, 'quantity', 0);
+                              return;
+                            }
+                            // Parse the value - if valid, update immediately
+                            const numValue = parseFloat(inputValue);
+                            if (!isNaN(numValue) && numValue >= 0) {
+                              updateCartItem(item.product_id, 'quantity', numValue);
+                            }
+                          }}
+                          onBlur={(e) => {
+                            // On blur, ensure we have a valid minimum quantity
+                            const value = safeParseFloat(e.target.value, 1);
+                            const availableStock = safeParseFloat(item.stock_quantity || 0, 0);
+                            
+                            // If empty or invalid, default to 1 (or available stock if less than 1)
+                            if (value <= 0) {
+                              const defaultQty = availableStock > 0 ? 1 : 0;
+                              updateCartItem(item.product_id, 'quantity', defaultQty);
+                              if (defaultQty === 0 && availableStock === 0) {
+                                toast.error(`${item.name} is out of stock`);
+                              }
+                              return;
+                            }
+                            
+                            // If exceeds stock, cap at available stock
+                            if (value > availableStock) {
+                              toast.error(`Insufficient stock. Setting quantity to available: ${formatQuantity(availableStock)}`);
+                              updateCartItem(item.product_id, 'quantity', availableStock);
+                            }
                           }}
                           className="w-full px-2 py-1 border border-gray-300 rounded text-sm bg-white text-gray-900"
                         />
