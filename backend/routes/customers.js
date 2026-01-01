@@ -35,8 +35,10 @@ router.get('/', async (req, res, next) => {
       params.push(searchTerm, searchTerm, searchTerm, searchTerm);
     }
 
-    query += ' ORDER BY c.name ASC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), parseInt(offset));
+    // Use template literals for LIMIT and OFFSET (MySQL doesn't support placeholders for these)
+    const limitNum = parseInt(limit) || 100;
+    const offsetNum = parseInt(offset) || 0;
+    query += ` ORDER BY c.name ASC LIMIT ${limitNum} OFFSET ${offsetNum}`;
 
     const [customers] = await pool.execute(query, params);
 

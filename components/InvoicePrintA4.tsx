@@ -324,6 +324,12 @@ export default function InvoicePrintA4({ bill, templateConfig }: InvoicePrintA4P
                           <td class="right">${totalCGST.toFixed(2)}</td>
                         </tr>
                       ` : ''}
+                      ${Math.abs(parseFloat(bill.round_off || 0)) > 0.01 ? `
+                        <tr>
+                          <td>Round Off</td>
+                          <td class="right">${parseFloat(bill.round_off || 0) > 0 ? '+' : ''}${Math.abs(parseFloat(bill.round_off || 0)).toFixed(2)}</td>
+                        </tr>
+                      ` : ''}
                       <tr class="totals">
                         <td>GRAND TOTAL</td>
                         <td class="right">${grandTotal.toFixed(2)}</td>

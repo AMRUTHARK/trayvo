@@ -101,6 +101,8 @@ export default function ThermalPrint({ bill }: ThermalPrintProps) {
       const shopAddress = shop?.address || '';
       const shopPhone = shop?.phone || '';
       const shopGstin = shop?.gstin || '';
+      const shopEmail = shop?.email || '';
+      const shopState = shop?.state || '';
 
       let printContent = '';
 
@@ -125,9 +127,19 @@ export default function ThermalPrint({ bill }: ThermalPrintProps) {
         printContent += 'PHONE: ' + shopPhone + '\n';
       }
       
+      // Email (if available)
+      if (shopEmail) {
+        printContent += 'EMAIL: ' + shopEmail + '\n';
+      }
+      
       // GSTIN (centered, with GSTIN: prefix)
       if (shopGstin) {
         printContent += 'GSTIN: ' + shopGstin + '\n';
+      }
+      
+      // State (if available)
+      if (shopState) {
+        printContent += 'STATE: ' + shopState.toUpperCase() + '\n';
       }
       
       printContent += ESC + '!' + '\x10'; // Double size
@@ -141,32 +153,67 @@ export default function ThermalPrint({ bill }: ThermalPrintProps) {
       if (bill.customer_name) {
         printContent += `Customer Name: ${bill.customer_name}\n`;
       }
-      printContent += `Bill No: ${bill.bill_number}\n`;
+      printContent += `Invoice No: ${bill.bill_number}\n`;
       printContent += `Payment Mode: ${formatPaymentMode(bill.payment_mode)}\n`;
-      printContent += `DR Ref: ${bill.id}\n`;
+      if (bill.customer_phone) {
+        printContent += `Contact No: ${bill.customer_phone}\n`;
+      }
+      if (bill.customer_gstin) {
+        printContent += `Customer GSTIN: ${bill.customer_gstin}\n`;
+      }
+      if (bill.customer_address) {
+        const addressLines = bill.customer_address.split('\n').filter((line: string) => line.trim());
+        addressLines.forEach((line: string) => {
+          printContent += `Address: ${line.trim()}\n`;
+        });
+      }
+      if (bill.shipping_address && bill.shipping_address !== bill.customer_address) {
+        printContent += `Shipping: ${bill.shipping_address}\n`;
+      }
       printContent += '--------------------------------\n';
 
-      // Items table header
-      printContent += 'Item                    Qty    Rate    Amt\n';
+      // Items table header (include HSN if available)
+      const hasHSN = bill.items.some((item: any) => item.hsn_code);
+      if (hasHSN) {
+        printContent += 'Sl Item              HSN Qty  Rate  Amt\n';
+      } else {
+        printContent += 'Sl Item                    Qty    Rate    Amt\n';
+      }
       printContent += '--------------------------------\n';
 
       // Items
-      bill.items.forEach((item: any) => {
+      bill.items.forEach((item: any, index: number) => {
+        const slNo = (index + 1).toString().padStart(2, ' ');
         const name = item.product_name || '';
+        const hsn = item.hsn_code || '';
         const qty = parseFloat(item.quantity || 0);
         const rate = parseFloat(item.unit_price || 0);
         const amt = parseFloat(item.total_amount || 0);
         const gstRate = parseFloat(item.gst_rate || 0);
-        // Format: Item name (truncated to fit), Qty, Rate, Amt
-        const namePart = name.substring(0, 18).padEnd(18);
-        // Format quantities and amounts with locale (compact for thermal printer)
-        const qtyFormatted = formatQuantity(qty, 3).replace(/,/g, '');
-        const rateFormatted = formatNumber(rate, 2).replace(/,/g, '');
-        const amtFormatted = formatNumber(amt, 2).replace(/,/g, '');
-        const qtyPart = qtyFormatted.padStart(5);
-        const ratePart = ('₹' + rateFormatted).padStart(6);
-        const amtPart = ('₹' + amtFormatted).padStart(8);
-        printContent += `${namePart} ${qtyPart} ${ratePart} ${amtPart}\n`;
+        
+        if (hasHSN) {
+          // Format with HSN: Sl Item HSN Qty Rate Amt
+          const namePart = name.substring(0, 15).padEnd(15);
+          const hsnPart = hsn.substring(0, 6).padEnd(6);
+          const qtyFormatted = formatQuantity(qty, 3).replace(/,/g, '');
+          const rateFormatted = formatNumber(rate, 2).replace(/,/g, '');
+          const amtFormatted = formatNumber(amt, 2).replace(/,/g, '');
+          const qtyPart = qtyFormatted.padStart(4);
+          const ratePart = ('₹' + rateFormatted).padStart(6);
+          const amtPart = ('₹' + amtFormatted).padStart(7);
+          printContent += `${slNo} ${namePart} ${hsnPart} ${qtyPart} ${ratePart} ${amtPart}\n`;
+        } else {
+          // Format: Sl Item Qty Rate Amt
+          const namePart = name.substring(0, 18).padEnd(18);
+          const qtyFormatted = formatQuantity(qty, 3).replace(/,/g, '');
+          const rateFormatted = formatNumber(rate, 2).replace(/,/g, '');
+          const amtFormatted = formatNumber(amt, 2).replace(/,/g, '');
+          const qtyPart = qtyFormatted.padStart(5);
+          const ratePart = ('₹' + rateFormatted).padStart(6);
+          const amtPart = ('₹' + amtFormatted).padStart(8);
+          printContent += `${slNo} ${namePart} ${qtyPart} ${ratePart} ${amtPart}\n`;
+        }
+        
         // Show GST% if applicable
         if (gstRate > 0) {
           const gstRateFormatted = formatNumber(gstRate, 2).replace(/,/g, '');
@@ -242,10 +289,30 @@ export default function ThermalPrint({ bill }: ThermalPrintProps) {
         printContent += `Cash tendered: ₹${totalFormatted}\n`;
       }
 
+      // Bank details (if available)
+      if (shop?.bank_name || shop?.account_number) {
+        printContent += '--------------------------------\n';
+        printContent += ESC + 'a' + '\x00'; // Left align
+        printContent += 'Bank Details:\n';
+        if (shop.bank_name) {
+          printContent += `${shop.bank_name}${shop.bank_branch ? ' ' + shop.bank_branch + ' Branch' : ''}\n`;
+        }
+        if (shop.account_number) {
+          printContent += `A/C No: ${shop.account_number}\n`;
+        }
+        if (shop.ifsc_code) {
+          printContent += `IFSC: ${shop.ifsc_code}\n`;
+        }
+      }
+      
       printContent += '--------------------------------\n';
       printContent += ESC + 'a' + '\x01'; // Center align
       if (shop?.email) {
         printContent += `Email: ${shop.email}\n`;
+        printContent += `For queries: ${shop.email}\n`;
+      }
+      if (shop?.state) {
+        printContent += `State: ${shop.state.toUpperCase()}\n`;
       }
       printContent += 'Thank You! Do Visit Again!\n';
       printContent += 'E & O.E\n';
@@ -355,34 +422,44 @@ export default function ThermalPrint({ bill }: ThermalPrintProps) {
           <div class="header">${shopName.toUpperCase()}</div>
           ${shopAddress ? `<div class="shop-info">${shopAddress.toUpperCase()}</div>` : ''}
           ${shopPhone ? `<div class="shop-info">PHONE: ${shopPhone}</div>` : ''}
+          ${shopEmail ? `<div class="shop-info">EMAIL: ${shopEmail}</div>` : ''}
           ${shopGstin ? `<div class="shop-info">GSTIN: ${shopGstin}</div>` : ''}
+          ${shop?.state ? `<div class="shop-info">STATE: ${shop.state.toUpperCase()}</div>` : ''}
           <div class="doc-title">Retail Invoice</div>
           <div class="divider"></div>
           <div>Date: ${formatDate(bill.created_at)}</div>
           ${bill.customer_name ? `<div>Customer Name: ${bill.customer_name}</div>` : ''}
-          <div>Bill No: ${bill.bill_number}</div>
+          <div>Invoice No: ${bill.bill_number}</div>
           <div>Payment Mode: ${formatPaymentMode(bill.payment_mode)}</div>
-          <div>DR Ref: ${bill.id}</div>
+          ${bill.customer_phone ? `<div>Contact No: ${bill.customer_phone}</div>` : ''}
+          ${bill.customer_gstin ? `<div>Customer GSTIN: ${bill.customer_gstin}</div>` : ''}
+          ${bill.customer_address ? `<div>Address: ${bill.customer_address.replace(/\n/g, ', ')}</div>` : ''}
+          ${bill.shipping_address && bill.shipping_address !== bill.customer_address ? `<div>Shipping: ${bill.shipping_address.replace(/\n/g, ', ')}</div>` : ''}
           <div class="divider"></div>
           <table>
             <thead>
               <tr>
+                <th>Sl</th>
                 <th>Item</th>
+                ${bill.items.some((item: any) => item.hsn_code) ? '<th>HSN</th>' : ''}
                 <th class="center">Qty</th>
                 <th class="right">Rate</th>
                 <th class="right">Amt</th>
               </tr>
             </thead>
             <tbody>
-              ${bill.items.map((item: any) => {
+              ${bill.items.map((item: any, index: number) => {
                 const gstRate = parseFloat(item.gst_rate || 0);
                 const quantity = formatQuantity(item.quantity);
                 const unitPrice = formatCurrency(item.unit_price);
                 const totalAmount = formatCurrency(item.total_amount);
                 const gstRateFormatted = formatPercentage(gstRate);
+                const hasHSN = bill.items.some((i: any) => i.hsn_code);
                 return `
                 <tr>
+                  <td class="center">${index + 1}</td>
                   <td>${item.product_name}${gstRate > 0 ? ` <small>(GST ${gstRateFormatted})</small>` : ''}</td>
+                  ${hasHSN ? `<td>${item.hsn_code || ''}</td>` : ''}
                   <td class="center">${quantity}</td>
                   <td class="right">${unitPrice}</td>
                   <td class="right">${totalAmount}</td>
@@ -424,9 +501,20 @@ export default function ThermalPrint({ bill }: ThermalPrintProps) {
             <div>${formatPaymentMode(bill.payment_mode)}: ${formatCurrency(total)}</div>
             ${bill.payment_mode === 'cash' ? `<div>Cash tendered: ${formatCurrency(total)}</div>` : ''}
           </div>
+          ${(shop?.bank_name || shop?.account_number) ? `
+          <div class="divider"></div>
+          <div class="summary">
+            <div><strong>Bank Details:</strong></div>
+            ${shop.bank_name ? `<div>${shop.bank_name}${shop.bank_branch ? ' ' + shop.bank_branch + ' Branch' : ''}</div>` : ''}
+            ${shop.account_number ? `<div>A/C No: ${shop.account_number}</div>` : ''}
+            ${shop.ifsc_code ? `<div>IFSC: ${shop.ifsc_code}</div>` : ''}
+          </div>
+          ` : ''}
           <div class="divider"></div>
           <div class="footer">
             ${shopEmail ? `<div>Email: ${shopEmail}</div>` : ''}
+            ${shopEmail ? `<div>For queries: ${shopEmail}</div>` : ''}
+            ${shop?.state ? `<div>State: ${shop.state.toUpperCase()}</div>` : ''}
             <div>Thank You! Do Visit Again!</div>
             <div>E & O.E</div>
           </div>

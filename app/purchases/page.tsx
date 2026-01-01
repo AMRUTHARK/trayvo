@@ -314,6 +314,7 @@ export default function PurchasesPage() {
                   <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Purchase #</th>
                   <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Supplier</th>
                   <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Date</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Qty</th>
                   <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Total</th>
                   <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Status</th>
                   <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Actions</th>
@@ -325,6 +326,7 @@ export default function PurchasesPage() {
                     <td className="px-4 py-3 text-sm">{purchase.purchase_number}</td>
                     <td className="px-4 py-3 text-sm">{purchase.supplier_name || '-'}</td>
                     <td className="px-4 py-3 text-sm">{format(new Date(purchase.created_at), 'dd MMM yyyy')}</td>
+                    <td className="px-4 py-3 text-sm">{formatQuantity(purchase.total_quantity || 0)}</td>
                     <td className="px-4 py-3 text-sm font-medium">{formatCurrency(purchase.total_amount)}</td>
                     <td className="px-4 py-3 text-sm">
                       <span className={`px-2 py-1 rounded text-xs ${

@@ -51,7 +51,8 @@ router.get('/', async (req, res, next) => {
     let query = `
       SELECT p.id, p.purchase_number, p.supplier_name, p.supplier_phone, 
              p.subtotal, p.discount_amount, p.gst_amount, p.total_amount, 
-             p.payment_mode, p.status, p.created_at, u.username as user_name
+             p.payment_mode, p.status, p.created_at, u.username as user_name,
+             (SELECT COALESCE(SUM(pi.quantity), 0) FROM purchase_items pi WHERE pi.purchase_id = p.id) as total_quantity
       FROM purchases p
       JOIN users u ON p.user_id = u.id
       WHERE p.shop_id = ?
