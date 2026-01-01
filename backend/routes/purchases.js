@@ -627,13 +627,19 @@ router.put('/:id', [
         connection
       );
 
-      // Reverse old stock (only if purchase was completed)
-      if (originalPurchase.status === 'completed') {
-        await stockManager.reversePurchaseStock(
+      // Apply stock changes using net-change method (handles decrease scenarios correctly)
+      // This method calculates the difference between old and new quantities and applies
+      // the net change directly, avoiding issues where current stock < original purchase quantity
+      // Only apply stock changes if purchase is/was completed (draft purchases don't affect stock)
+      if (originalPurchase.status === 'completed' || status === 'completed') {
+        await stockManager.applyPurchaseStockEdit(
           id,
           req.shopId,
           req.user.id,
-          `Purchase edit reversal - ${purchaseNumber}`,
+          purchaseItems,
+          originalPurchase.status,
+          status,
+          purchaseNumber,
           connection
         );
       }
@@ -653,11 +659,6 @@ router.put('/:id', [
             item.gst_amount, item.discount_amount, item.total_amount
           ]
         );
-      }
-
-      // Apply new stock (only if status is completed)
-      if (status === 'completed') {
-        await stockManager.applyPurchaseStock(purchaseItems, id, req.shopId, req.user.id, purchaseNumber, connection);
       }
 
       // Update purchase

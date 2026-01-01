@@ -295,6 +295,7 @@ router.post('/', [
       let finalCustomerId = null;
 
       if (customer_id) {
+        // Customer ID provided - use existing customer
         const [customers] = await connection.execute(
           'SELECT * FROM customers WHERE id = ? AND shop_id = ? AND status = ?',
           [customer_id, req.shopId, 'active']
@@ -310,6 +311,115 @@ router.post('/', [
           finalCustomerGstin = customer_gstin || customer.gstin || null;
           finalCustomerAddress = customer_address || customer.address || null;
           finalShippingAddress = shipping_address || customer.shipping_address || customer.address || null;
+        }
+      } else if (customer_name || customer_phone) {
+        // No customer_id provided, but customer info exists - auto-create or find existing customer
+        // Check if customer already exists by phone or name+phone
+        let existingCustomer = null;
+        
+        if (customer_phone && customer_phone.trim()) {
+          // First, try to find by phone (most reliable identifier)
+          const [customersByPhone] = await connection.execute(
+            'SELECT * FROM customers WHERE shop_id = ? AND phone = ? AND status = ?',
+            [req.shopId, customer_phone.trim(), 'active']
+          );
+          
+          if (customersByPhone.length > 0) {
+            existingCustomer = customersByPhone[0];
+          }
+        }
+        
+        // If not found by phone and we have both name and phone, try name+phone combination
+        if (!existingCustomer && customer_name && customer_phone && customer_name.trim() && customer_phone.trim()) {
+          const [customersByNamePhone] = await connection.execute(
+            'SELECT * FROM customers WHERE shop_id = ? AND name = ? AND phone = ? AND status = ?',
+            [req.shopId, customer_name.trim(), customer_phone.trim(), 'active']
+          );
+          
+          if (customersByNamePhone.length > 0) {
+            existingCustomer = customersByNamePhone[0];
+          }
+        }
+        
+        if (existingCustomer) {
+          // Customer exists - use existing customer and merge information
+          finalCustomerId = existingCustomer.id;
+          // Merge provided values with existing customer data (provided values take precedence)
+          finalCustomerName = customer_name?.trim() || existingCustomer.name || null;
+          finalCustomerPhone = customer_phone?.trim() || existingCustomer.phone || null;
+          finalCustomerEmail = customer_email?.trim() || existingCustomer.email || null;
+          finalCustomerGstin = customer_gstin?.trim().toUpperCase() || existingCustomer.gstin || null;
+          finalCustomerAddress = customer_address?.trim() || existingCustomer.address || null;
+          finalShippingAddress = shipping_address?.trim() || existingCustomer.shipping_address || existingCustomer.address || null;
+          
+          // Optionally update existing customer with new information if provided values are more complete
+          const updateFields = [];
+          const updateParams = [];
+          
+          if (customer_name?.trim() && customer_name.trim() !== existingCustomer.name) {
+            updateFields.push('name = ?');
+            updateParams.push(customer_name.trim());
+          }
+          if (customer_phone?.trim() && customer_phone.trim() !== (existingCustomer.phone || '')) {
+            updateFields.push('phone = ?');
+            updateParams.push(customer_phone.trim());
+          }
+          if (customer_email?.trim() && customer_email.trim() !== (existingCustomer.email || '')) {
+            updateFields.push('email = ?');
+            updateParams.push(customer_email.trim());
+          }
+          if (customer_gstin?.trim() && customer_gstin.trim().toUpperCase() !== (existingCustomer.gstin || '')) {
+            updateFields.push('gstin = ?');
+            updateParams.push(customer_gstin.trim().toUpperCase());
+          }
+          if (customer_address?.trim() && customer_address.trim() !== (existingCustomer.address || '')) {
+            updateFields.push('address = ?');
+            updateParams.push(customer_address.trim());
+          }
+          if (shipping_address?.trim() && shipping_address.trim() !== (existingCustomer.shipping_address || '')) {
+            updateFields.push('shipping_address = ?');
+            updateParams.push(shipping_address.trim());
+          }
+          
+          if (updateFields.length > 0) {
+            updateParams.push(existingCustomer.id, req.shopId);
+            await connection.execute(
+              `UPDATE customers SET ${updateFields.join(', ')}, updated_at = NOW() WHERE id = ? AND shop_id = ?`,
+              updateParams
+            );
+          }
+        } else {
+          // Customer doesn't exist - create new customer record
+          // Only create if we have at least name or phone (name is required in DB)
+          const trimmedName = customer_name?.trim();
+          const trimmedPhone = customer_phone?.trim();
+          
+          if (trimmedName || trimmedPhone) {
+            // Ensure we have a valid name (required field in customers table)
+            const customerNameToUse = trimmedName || (trimmedPhone ? `Customer - ${trimmedPhone}` : 'Customer');
+            
+            const [newCustomerResult] = await connection.execute(
+              `INSERT INTO customers (shop_id, name, phone, email, gstin, address, shipping_address, status, notes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, 'active', NULL)`,
+              [
+                req.shopId,
+                customerNameToUse,
+                trimmedPhone || null,
+                customer_email?.trim() || null,
+                customer_gstin?.trim().toUpperCase() || null,
+                customer_address?.trim() || null,
+                shipping_address?.trim() || customer_address?.trim() || null,
+              ]
+            );
+            
+            finalCustomerId = newCustomerResult.insertId;
+            finalCustomerName = customerNameToUse;
+            finalCustomerPhone = trimmedPhone || null;
+            finalCustomerEmail = customer_email?.trim() || null;
+            finalCustomerGstin = customer_gstin?.trim().toUpperCase() || null;
+            finalCustomerAddress = customer_address?.trim() || null;
+            finalShippingAddress = shipping_address?.trim() || customer_address?.trim() || null;
+          }
         }
       }
 
