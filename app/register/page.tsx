@@ -29,6 +29,7 @@ function RegisterForm() {
     gstin: '',
   });
   const [selectedGstRates, setSelectedGstRates] = useState<string[]>(['0']); // Default: 0% selected
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({}); // Track field-specific errors
   const availableGstRates = [
     { value: '0', label: '0% (Nil)' },
     { value: '0.25', label: '0.25% (Rough Diamonds)' },
@@ -89,6 +90,8 @@ function RegisterForm() {
       return;
     }
 
+    // Clear previous field errors
+    setFieldErrors({});
     setLoading(true);
 
     try {
@@ -113,7 +116,38 @@ function RegisterForm() {
         router.push('/login');
       }
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Registration failed');
+      // Handle validation errors with field-specific messages
+      if (error.response?.status === 400 && error.response?.data?.errors) {
+        const validationErrors: Record<string, string> = {};
+        
+        // Parse validation errors from express-validator format
+        // express-validator returns: { param: 'fieldname', msg: 'error message', location: 'body' }
+        error.response.data.errors.forEach((err: any) => {
+          // Try multiple possible field name properties
+          const fieldName = err.param || err.path || err.field || err.location;
+          if (fieldName && fieldName !== 'body' && fieldName !== 'query' && fieldName !== 'params') {
+            validationErrors[fieldName] = err.msg || err.message || 'Invalid value';
+          }
+        });
+
+        // Set field-specific errors
+        if (Object.keys(validationErrors).length > 0) {
+          setFieldErrors(validationErrors);
+          
+          // Show general error message with count
+          const errorCount = Object.keys(validationErrors).length;
+          toast.error(
+            `Validation failed: Please check ${errorCount} field${errorCount > 1 ? 's' : ''} below.`,
+            { duration: 5000 }
+          );
+        } else {
+          // Fallback to general error message
+          toast.error(error.response?.data?.message || 'Registration failed');
+        }
+      } else {
+        // Non-validation errors (network, server, etc.)
+        toast.error(error.response?.data?.message || 'Registration failed');
+      }
     } finally {
       setLoading(false);
     }
@@ -204,10 +238,26 @@ function RegisterForm() {
                 type="text"
                 required
                 value={formData.full_name}
-                onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
+                onChange={(e) => {
+                  setFormData({ ...formData, full_name: e.target.value });
+                  if (fieldErrors.full_name) {
+                    const newErrors = { ...fieldErrors };
+                    delete newErrors.full_name;
+                    setFieldErrors(newErrors);
+                  }
+                }}
+                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:border-transparent bg-white text-gray-900 ${
+                  fieldErrors.full_name 
+                    ? 'border-red-500 focus:ring-red-500' 
+                    : 'border-gray-300 focus:ring-blue-500'
+                }`}
                 placeholder="Your full name"
               />
+              {fieldErrors.full_name && (
+                <p className="text-xs text-red-600 mt-1 font-medium">
+                  ⚠️ {fieldErrors.full_name}
+                </p>
+              )}
             </div>
 
             <div>
@@ -219,10 +269,26 @@ function RegisterForm() {
                 type="email"
                 required
                 value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
+                onChange={(e) => {
+                  setFormData({ ...formData, email: e.target.value });
+                  if (fieldErrors.email) {
+                    const newErrors = { ...fieldErrors };
+                    delete newErrors.email;
+                    setFieldErrors(newErrors);
+                  }
+                }}
+                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:border-transparent bg-white text-gray-900 ${
+                  fieldErrors.email 
+                    ? 'border-red-500 focus:ring-red-500' 
+                    : 'border-gray-300 focus:ring-blue-500'
+                }`}
                 placeholder="your.email@example.com"
               />
+              {fieldErrors.email && (
+                <p className="text-xs text-red-600 mt-1 font-medium">
+                  ⚠️ {fieldErrors.email}
+                </p>
+              )}
             </div>
 
             <div>
@@ -267,10 +333,26 @@ function RegisterForm() {
                 required
                 minLength={3}
                 value={formData.username}
-                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
+                onChange={(e) => {
+                  setFormData({ ...formData, username: e.target.value });
+                  if (fieldErrors.username) {
+                    const newErrors = { ...fieldErrors };
+                    delete newErrors.username;
+                    setFieldErrors(newErrors);
+                  }
+                }}
+                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:border-transparent bg-white text-gray-900 ${
+                  fieldErrors.username 
+                    ? 'border-red-500 focus:ring-red-500' 
+                    : 'border-gray-300 focus:ring-blue-500'
+                }`}
                 placeholder="Choose a username"
               />
+              {fieldErrors.username && (
+                <p className="text-xs text-red-600 mt-1 font-medium">
+                  ⚠️ {fieldErrors.username}
+                </p>
+              )}
             </div>
           </div>
 
@@ -284,9 +366,22 @@ function RegisterForm() {
                 required
                 minLength={6}
                 value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                onChange={(e) => {
+                  setFormData({ ...formData, password: e.target.value });
+                  if (fieldErrors.password) {
+                    const newErrors = { ...fieldErrors };
+                    delete newErrors.password;
+                    setFieldErrors(newErrors);
+                  }
+                }}
+                className={fieldErrors.password ? 'border-red-500' : ''}
                 placeholder="Minimum 6 characters"
               />
+              {fieldErrors.password && (
+                <p className="text-xs text-red-600 mt-1 font-medium">
+                  ⚠️ {fieldErrors.password}
+                </p>
+              )}
             </div>
 
             <div>
@@ -320,11 +415,28 @@ function RegisterForm() {
                     // Convert to uppercase and allow only alphanumeric
                     const value = e.target.value.toUpperCase().replace(/[^0-9A-Z]/g, '');
                     setFormData({ ...formData, gstin: value });
+                    // Clear error when user starts typing
+                    if (fieldErrors.gstin) {
+                      const newErrors = { ...fieldErrors };
+                      delete newErrors.gstin;
+                      setFieldErrors(newErrors);
+                    }
                   }}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900"
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:border-transparent bg-white text-gray-900 ${
+                    fieldErrors.gstin 
+                      ? 'border-red-500 focus:ring-red-500' 
+                      : 'border-gray-300 focus:ring-blue-500'
+                  }`}
                   placeholder="22AAAAA0000A1Z5 (15 characters)"
                 />
-                <p className="text-xs text-gray-500 mt-1">
+                {fieldErrors.gstin && (
+                  <p className="text-xs text-red-600 mt-1 font-medium">
+                    ⚠️ {fieldErrors.gstin}
+                  </p>
+                )}
+                <p className={`text-xs mt-1 ${
+                  fieldErrors.gstin ? 'text-gray-400' : 'text-gray-500'
+                }`}>
                   Goods and Services Tax Identification Number (optional). Format: 15 alphanumeric characters.
                 </p>
               </div>

@@ -599,22 +599,47 @@ export default function SettingsPage() {
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (file) {
-                        if (file.size > 2 * 1024 * 1024) {
-                          toast.error('Image size must be less than 2MB');
+                        // Limit to 1.5MB raw file size to account for base64 encoding overhead (~33%)
+                        // 1.5MB raw file = ~2MB base64 encoded, which is reasonable
+                        const maxSize = 1.5 * 1024 * 1024; // 1.5MB
+                        if (file.size > maxSize) {
+                          const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+                          toast.error(
+                            `Image size (${fileSizeMB}MB) exceeds the limit of 1.5MB. Please compress your image before uploading.`,
+                            { duration: 6000 }
+                          );
+                          // Reset file input
+                          e.target.value = '';
                           return;
                         }
                         const reader = new FileReader();
                         reader.onloadend = () => {
                           const base64String = reader.result as string;
+                          // Double-check base64 size (should be ~33% larger than original)
+                          const base64Size = (base64String.length * 3) / 4;
+                          if (base64Size > 3 * 1024 * 1024) { // 3MB base64 limit (extra safety check)
+                            toast.error(
+                              'Encoded image size is too large. Please use a smaller or more compressed image.',
+                              { duration: 6000 }
+                            );
+                            e.target.value = '';
+                            return;
+                          }
                           setFormData({ ...formData, logo_url: base64String });
                           setLogoPreview(base64String);
+                        };
+                        reader.onerror = () => {
+                          toast.error('Failed to read image file. Please try again.');
+                          e.target.value = '';
                         };
                         reader.readAsDataURL(file);
                       }
                     }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 text-sm"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Recommended: Square image, max 2MB (PNG, JPG)</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Recommended: Square image, max 1.5MB (PNG, JPG). Larger files will be rejected. Use image compression tools if needed.
+                  </p>
                 </div>
                 {logoPreview && (
                   <button

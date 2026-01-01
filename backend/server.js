@@ -18,8 +18,11 @@ app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:3000',
   credentials: true
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Increase body size limit to handle base64-encoded images (e.g., shop logos)
+// Base64 encoding increases size by ~33%, so 2MB file becomes ~2.7MB
+// 10MB limit provides comfortable buffer for logo uploads and other large payloads
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Rate limiting - separate limiters for different routes
 const authLimiter = rateLimit({

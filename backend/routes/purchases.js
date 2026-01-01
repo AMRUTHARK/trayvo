@@ -165,9 +165,9 @@ router.post('/', [
   body('items.*.product_id').isInt().withMessage('Valid product ID is required'),
   body('items.*.quantity').isFloat({ min: 0.001 }).withMessage('Valid quantity is required'),
   body('payment_mode').optional().isIn(['cash', 'upi', 'card', 'credit']).withMessage('Invalid payment mode'),
-  body('supplier_name').optional().trim(),
-  body('supplier_phone').optional().trim(),
-  body('supplier_email').optional().trim().isEmail().withMessage('Invalid supplier email'),
+  body('supplier_name').optional({ checkFalsy: true }).trim(),
+  body('supplier_phone').optional({ checkFalsy: true }).trim(),
+  body('supplier_email').optional({ checkFalsy: true }).trim().isEmail().withMessage('Invalid supplier email'),
 ], async (req, res, next) => {
   try {
     const errors = validationResult(req);

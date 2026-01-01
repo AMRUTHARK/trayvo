@@ -33,6 +33,7 @@ export default function PurchasesPage() {
     notes: '',
   });
   const [submitting, setSubmitting] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (isCashier()) {
@@ -174,6 +175,9 @@ export default function PurchasesPage() {
       return;
     }
 
+    // Clear previous field errors
+    setFieldErrors({});
+
     try {
       setSubmitting(true);
       const totals = calculateTotals();
@@ -185,15 +189,15 @@ export default function PurchasesPage() {
       }));
 
       await api.post('/purchases', {
-        supplier_name: formData.supplier_name,
-        supplier_phone: formData.supplier_phone,
-        supplier_email: formData.supplier_email,
-        supplier_address: formData.supplier_address,
+        supplier_name: formData.supplier_name || null,
+        supplier_phone: formData.supplier_phone || null,
+        supplier_email: formData.supplier_email || null,
+        supplier_address: formData.supplier_address || null,
         items,
         discount_amount: formData.discount_amount,
         discount_percent: formData.discount_percent,
         payment_mode: formData.payment_mode,
-        notes: formData.notes,
+        notes: formData.notes || null,
         include_gst: true,
         status: 'completed',
       });
@@ -211,9 +215,39 @@ export default function PurchasesPage() {
         discount_amount: 0,
         notes: '',
       });
+      setFieldErrors({});
       fetchPurchases();
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to create purchase');
+      // Handle validation errors with field-specific messages
+      if (error.response?.status === 400 && error.response?.data?.errors) {
+        const validationErrors: Record<string, string> = {};
+        
+        // Parse validation errors from express-validator format
+        error.response.data.errors.forEach((err: any) => {
+          const fieldName = err.param || err.path || err.field || err.location;
+          if (fieldName && fieldName !== 'body' && fieldName !== 'query' && fieldName !== 'params') {
+            validationErrors[fieldName] = err.msg || err.message || 'Invalid value';
+          }
+        });
+
+        // Set field-specific errors
+        if (Object.keys(validationErrors).length > 0) {
+          setFieldErrors(validationErrors);
+          
+          // Show general error message with count
+          const errorCount = Object.keys(validationErrors).length;
+          toast.error(
+            `Validation failed: Please check ${errorCount} field${errorCount > 1 ? 's' : ''} below.`,
+            { duration: 5000 }
+          );
+        } else {
+          // Fallback to general error message
+          toast.error(error.response?.data?.message || 'Failed to create purchase');
+        }
+      } else {
+        // Non-validation errors (network, server, etc.)
+        toast.error(error.response?.data?.message || 'Failed to create purchase');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -322,7 +356,13 @@ export default function PurchasesPage() {
             <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-2xl font-bold">New Purchase</h2>
-                <button onClick={() => setShowCreateModal(false)} className="text-gray-500 hover:text-gray-700">
+                <button 
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setFieldErrors({});
+                  }} 
+                  className="text-gray-500 hover:text-gray-700"
+                >
                   ✕
                 </button>
               </div>
@@ -333,27 +373,70 @@ export default function PurchasesPage() {
                   <input
                     type="text"
                     value={formData.supplier_name}
-                    onChange={(e) => setFormData({ ...formData, supplier_name: e.target.value })}
-                    className="w-full px-3 py-2 border rounded"
+                    onChange={(e) => {
+                      setFormData({ ...formData, supplier_name: e.target.value });
+                      if (fieldErrors.supplier_name) {
+                        const newErrors = { ...fieldErrors };
+                        delete newErrors.supplier_name;
+                        setFieldErrors(newErrors);
+                      }
+                    }}
+                    className={`w-full px-3 py-2 border rounded ${
+                      fieldErrors.supplier_name ? 'border-red-500' : ''
+                    }`}
                   />
+                  {fieldErrors.supplier_name && (
+                    <p className="text-xs text-red-600 mt-1 font-medium">
+                      ⚠️ {fieldErrors.supplier_name}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Supplier Phone</label>
                   <input
                     type="text"
                     value={formData.supplier_phone}
-                    onChange={(e) => setFormData({ ...formData, supplier_phone: e.target.value })}
-                    className="w-full px-3 py-2 border rounded"
+                    onChange={(e) => {
+                      setFormData({ ...formData, supplier_phone: e.target.value });
+                      if (fieldErrors.supplier_phone) {
+                        const newErrors = { ...fieldErrors };
+                        delete newErrors.supplier_phone;
+                        setFieldErrors(newErrors);
+                      }
+                    }}
+                    className={`w-full px-3 py-2 border rounded ${
+                      fieldErrors.supplier_phone ? 'border-red-500' : ''
+                    }`}
                   />
+                  {fieldErrors.supplier_phone && (
+                    <p className="text-xs text-red-600 mt-1 font-medium">
+                      ⚠️ {fieldErrors.supplier_phone}
+                    </p>
+                  )}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Supplier Email</label>
+                  <label className="block text-sm font-medium mb-1">Supplier Email (Optional)</label>
                   <input
                     type="email"
                     value={formData.supplier_email}
-                    onChange={(e) => setFormData({ ...formData, supplier_email: e.target.value })}
-                    className="w-full px-3 py-2 border rounded"
+                    onChange={(e) => {
+                      setFormData({ ...formData, supplier_email: e.target.value });
+                      if (fieldErrors.supplier_email) {
+                        const newErrors = { ...fieldErrors };
+                        delete newErrors.supplier_email;
+                        setFieldErrors(newErrors);
+                      }
+                    }}
+                    className={`w-full px-3 py-2 border rounded ${
+                      fieldErrors.supplier_email ? 'border-red-500' : ''
+                    }`}
+                    placeholder="supplier@example.com"
                   />
+                  {fieldErrors.supplier_email && (
+                    <p className="text-xs text-red-600 mt-1 font-medium">
+                      ⚠️ {fieldErrors.supplier_email}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Payment Mode</label>
@@ -507,7 +590,10 @@ export default function PurchasesPage() {
 
               <div className="flex justify-end gap-4">
                 <button
-                  onClick={() => setShowCreateModal(false)}
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setFieldErrors({});
+                  }}
                   className="px-4 py-2 border rounded hover:bg-gray-50"
                 >
                   Cancel
