@@ -341,7 +341,7 @@ export default function InvoicePrintA4({ bill, templateConfig }: InvoicePrintA4P
 
               <!-- FOOTER -->
               <div class="footer">
-                ${shop.email ? `In the case of any queries write us to ${shop.email}` : ''}
+                ${shop.email ? `In case of any queries, write to us at ${shop.email}` : ''}
               </div>
 
               <div class="signature">
