@@ -417,6 +417,22 @@ export default function POSPage() {
       return;
     }
 
+    // Pre-validate stock before checkout using current stored stock
+    // This is a quick check - backend will do final validation with fresh data
+    const stockIssues: string[] = [];
+    cart.forEach(item => {
+      const availableStock = safeParseFloat(item.stock_quantity || 0, 0);
+      const requestedQty = safeParseFloat(item.quantity, 0);
+      if (requestedQty > availableStock && availableStock >= 0) {
+        stockIssues.push(`${item.name}: Insufficient stock. Available: ${formatQuantity(availableStock)}, Requested: ${formatQuantity(requestedQty)}`);
+      }
+    });
+
+    if (stockIssues.length > 0) {
+      stockIssues.forEach(issue => toast.error(issue, { duration: 5000 }));
+      return; // Don't proceed if we detect stock issues
+    }
+
     setLoading(true);
     try {
       const { subtotal, billDiscount, totalGst, total } = calculateTotals();
@@ -458,7 +474,37 @@ export default function POSPage() {
         router.push(`/bills/${response.data.data.id}`);
       }
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to create bill');
+      // Enhanced error handling for stock issues
+      const errorMessage = error.response?.data?.message || 'Failed to create bill';
+      
+      // Check if it's a stock-related error
+      if (errorMessage.includes('Insufficient stock') || errorMessage.includes('stock')) {
+        // Show detailed error message with longer duration
+        toast.error(errorMessage, { 
+          duration: 6000,
+          icon: '⚠️'
+        });
+        
+        // Parse the error message to extract product name and available stock
+        // Error format: "Insufficient stock for {product_name}. Available: {stock}"
+        const stockMatch = errorMessage.match(/Insufficient stock for (.+?)\. Available: (.+)/);
+        if (stockMatch) {
+          const [, productName, availableStock] = stockMatch;
+          
+          // Find the cart item and update its stock_quantity
+          setCart(prevCart => prevCart.map(item => {
+            if (item.name === productName.trim()) {
+              return {
+                ...item,
+                stock_quantity: safeParseFloat(availableStock, 0)
+              };
+            }
+            return item;
+          }));
+        }
+      } else {
+        toast.error(errorMessage);
+      }
     } finally {
       setLoading(false);
     }

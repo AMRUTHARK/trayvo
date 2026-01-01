@@ -417,6 +417,13 @@ export default function SettingsPage() {
         {/* Shop Settings */}
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="text-xl font-bold text-gray-800 mb-4">Shop Information</h2>
+          {shop && (
+            <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Shop ID</label>
+              <div className="text-lg font-semibold text-gray-900">{shop.id}</div>
+              <p className="text-xs text-gray-500 mt-1">Your unique shop identifier</p>
+            </div>
+          )}
           <form onSubmit={handleSave} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
